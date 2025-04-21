@@ -24,4 +24,8 @@ psycopg2-binary
 
 
 flask
+<<<<<<< HEAD
 gunicorn
+=======
+botocore
+>>>>>>> ebb7e5a (updates MVP DVI)

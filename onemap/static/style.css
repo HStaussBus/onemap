@@ -145,14 +145,10 @@ button:hover {
 .map-container {
     display: none; /* Hide inactive maps by default */
     width: 100%;
-    min-height: 400px; /* Adjust as needed for your map size */
+    min-height: 400px; /* Adjust as needed */
     border: 1px solid #ccc;
     border-radius: 4px;
     background-color: #f9f9f9; /* Light background for empty state */
-    /* Center placeholder text */
-    display: flex;
-    justify-content: center;
-    align-items: center;
     overflow: auto; /* Add scrollbars if map content overflows */
 }
 
@@ -163,8 +159,8 @@ button:hover {
 
 /* Show the active map container */
 .map-container.active {
-    display: flex; /* Use flex again to center content if it's just the placeholder */
-    /* If map fills the container, you might reset display: block; */
+    display: block; /* Show the active map using block display */
+    /* The iframe inside will fill this block */
 }
 
 /* Ensure Folium map iframes render correctly */

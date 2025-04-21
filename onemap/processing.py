@@ -170,6 +170,16 @@ def process_optdump(optdump, session_type, routes_to_buses):
     final_df[vehicle_col] = final_df["Route"].map(routes_to_buses)
     final_df.dropna(subset=[vehicle_col], inplace=True)
 
+    # Inside processing.py -> process_optdump function
+    # ... right before this line:
+    # final_df[f"{prefix}Vehicle#"] = final_df["Route"].map(routes_to_buses)
+    # Add these:
+    print(f"DEBUG ({prefix}): Routes in final_df before mapping: {final_df['Route'].unique()}")
+    print(f"DEBUG ({prefix}): Available routes_to_buses keys: {list(routes_to_buses.keys())}")
+    # Now the mapping line:
+    final_df[f"{prefix}Vehicle#"] = final_df["Route"].map(routes_to_buses)
+    # ... rest of the function ...
+
     if final_df.empty:
          print(f"INFO: No routes matched vehicle assignments for {session_type}.")
          return None # Return None if no rows remain after vehicle mapping

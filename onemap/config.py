@@ -8,6 +8,7 @@ AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
 GEOTAB_USERNAME = os.environ.get('GEOTAB_USERNAME_SECRET')
 GEOTAB_PASSWORD = os.environ.get('GEOTAB_PASSWORD_SECRET')
 MAPBOX_TOKEN = os.environ.get('MAPBOX_TOKEN')
+DB_TABLE_NAME = 'nycsbus_opt_routes'
 
 # Names of secrets stored in AWS Secrets Manager
 GOOGLE_SECRETS_NAME = "GoogleServiceCredsGRR"
