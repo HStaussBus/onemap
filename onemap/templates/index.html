@@ -35,18 +35,23 @@
             <div id="errorDisplay" style="display: none; color: red; text-align: center; padding: 10px;"></div>
 
             <div id="amMapContainer" class="map-container active">
-                <p>Enter route and date, then click "Show Map". AM map will appear here.</p>
+                <p>Enter route and date, then click "Get Map". AM map will appear here.</p>
             </div>
             <div id="pmMapContainer" class="map-container">
                 <p>PM Map will appear here.</p>
             </div>
         </div>
 
-
+        <div id="optTableContainer" style="display: none; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+            <h2>OPT Data Details</h2>
+            <div id="optTableContent" style="max-height: 400px; overflow-y: auto; border: 1px solid #eee;">
+                <p style="padding: 10px; font-style: italic; color: #666;">Click "OPT Information" link below to load details.</p>
+            </div>
+        </div>
         <div class="info-links">
-            <a href="#" id="dviLink">DVI</a>
+            <a href="#" id="dviLink" style="opacity: 0.5;">DVI</a>
             <a href="#" id="fleetioLink">Fleetio Information</a>
-            <a href="#" id="optLink">OPT Information</a>
+             <a href="javascript:void(0);" id="optLink">OPT Information</a>
         </div>
     </div>
 
