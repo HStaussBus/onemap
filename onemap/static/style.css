@@ -1,184 +1,351 @@
-body {
-    font-family: sans-serif;
+/* static/style.css */
+
+/* Basic Reset & Body Styling */
+* {
+    box-sizing: border-box;
     margin: 0;
-    padding: 20px;
-    background-color: #f4f4f4;
-    color: #333;
+    padding: 0;
 }
 
-.container {
-    max-width: 800px;
-    margin: 20px auto; /* Centers the container */
-    background-color: #fff;
-    padding: 30px;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-color: #f8f9fa; /* Very light gray background */
+    color: #495057; /* Darker gray for text */
+    line-height: 1.6;
 }
 
-h1 {
-    text-align: center;
-    color: #2c3e50;
-    margin-bottom: 30px;
+/* Overall page container for max-width and centering */
+.page-container {
+    max-width: 1600px; /* Adjust max width as needed */
+    margin: 0 auto; /* Center the container */
+    padding: 0 20px 20px 20px; /* Add padding except at the top */
 }
 
-.input-section {
+/* Header Styling */
+.app-header {
     display: flex;
-    flex-wrap: wrap; /* Allows items to wrap on smaller screens */
+    justify-content: space-between; /* Pushes logo/title left, controls right */
+    align-items: center;
+    padding: 15px 25px; /* Vertical and horizontal padding */
+    background-color: #ffffff; /* White background */
+    border-bottom: 1px solid #dee2e6; /* Subtle border */
+    margin-bottom: 25px; /* Space below header */
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); /* Subtle shadow */
+}
+
+.logo-title {
+    display: flex;
+    align-items: center;
+    gap: 15px; /* Space between logo and title */
+}
+
+.logo {
+    height: 35px; /* Adjust logo size */
+    width: auto;
+}
+
+.app-header h1 {
+    font-size: 1.75em;
+    color: #343a40; /* Dark heading color */
+    margin: 0; /* Remove default margin */
+}
+
+.controls {
+    display: flex;
+    align-items: center;
     gap: 15px; /* Space between input groups and button */
-    align-items: flex-end; /* Aligns items nicely at the bottom */
-    margin-bottom: 30px;
-    padding-bottom: 20px;
-    border-bottom: 1px solid #eee;
 }
 
 .input-group {
-    flex: 1; /* Allows input groups to grow */
-    min-width: 200px; /* Minimum width before wrapping */
+    display: flex;
+    flex-direction: column; /* Stack label above input */
 }
 
 label {
-    display: block;
-    margin-bottom: 5px;
-    font-weight: bold;
-    font-size: 0.9em;
-    color: #555;
+    margin-bottom: 3px;
+    font-weight: 500; /* Medium weight */
+    font-size: 0.8em;
+    color: #6c757d; /* Lighter text for label */
 }
 
 input[type="text"],
 input[type="date"] {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #ccc;
+    padding: 8px 12px;
+    border: 1px solid #ced4da; /* Standard border color */
     border-radius: 4px;
-    box-sizing: border-box; /* Include padding and border in the element's total width and height */
-    font-size: 1em;
+    font-size: 0.95em;
+    min-width: 180px; /* Give date/text inputs some base width */
 }
 
-button {
-    padding: 10px 20px;
-    background-color: #3498db;
+button { /* General button style */
+    padding: 8px 18px;
+    background-color: #007bff; /* Primary blue */
     color: white;
     border: none;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 1em;
-    transition: background-color 0.3s ease;
-    height: 40px; /* Match input height roughly */
+    font-size: 0.95em;
+    font-weight: 500;
+    transition: background-color 0.2s ease;
+    white-space: nowrap; /* Prevent text wrapping */
 }
 
 button:hover {
-    background-color: #2980b9;
+    background-color: #0056b3; /* Darker blue on hover */
 }
 
-#mapContainer {
-    width: 100%;
-    min-height: 350px; /* Give it some space */
-    background-color: #e0e0e0; /* Placeholder background */
-    border: 1px dashed #aaa;
-    border-radius: 4px;
+#getMapButton { /* Specific adjustments if needed */
+    height: 37px; /* Align height with inputs */
+    align-self: flex-end; /* Align with bottom of inputs if labels wrap */
+}
+
+
+/* Main Content Layout (Map + Sidebar) */
+.main-content {
     display: flex;
-    justify-content: center;
-    align-items: center;
-    text-align: center;
-    color: #666;
-    font-style: italic;
-    margin-bottom: 30px;
+    gap: 25px; /* Space between map and sidebar */
+    flex-wrap: wrap; /* Allow sidebar to wrap below map on small screens */
 }
 
-.info-links {
-    text-align: center;
-    padding-top: 20px;
-    border-top: 1px solid #eee;
+/* Map Section Styling */
+.map-section {
+    flex: 3; /* Takes up more space (adjust ratio with sidebar as needed) */
+    min-width: 350px; /* Ensure map has minimum width */
+    display: flex;
+    flex-direction: column;
 }
 
-.info-links a {
-    margin: 0 15px;
-    color: #3498db;
-    text-decoration: none;
-    font-size: 0.95em;
-}
-
-.info-links a:hover {
-    text-decoration: underline;
-}
-
-/* ... (keep all your previous styles) ... */
-
-#mapDisplayArea {
-    margin-top: 20px;
-    margin-bottom: 30px;
-    /* Optional: add a border around the whole map area */
-    /* border: 1px solid #e0e0e0; */
-    /* padding: 15px; */
-    /* border-radius: 4px; */
-}
-
-.map-toggle-buttons {
+.map-toggles {
     text-align: center;
     margin-bottom: 15px;
 }
 
-.toggle-button {
+.toggle-button { /* Reusing existing toggle styles */
     padding: 8px 15px;
     margin: 0 5px;
     cursor: pointer;
-    border: 1px solid #ccc;
-    background-color: #f0f0f0;
+    border: 1px solid #ced4da;
+    background-color: #e9ecef; /* Light gray inactive */
     border-radius: 4px;
     font-size: 0.9em;
-    transition: background-color 0.3s ease, border-color 0.3s ease;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 .toggle-button:hover {
-    background-color: #e0e0e0;
+    background-color: #dee2e6;
 }
 
-/* Style for the active toggle button */
-.toggle-button.active {
-    background-color: #3498db;
+.toggle-button.active { /* Reusing existing active style */
+    background-color: #007bff; /* Match primary button color */
     color: white;
-    border-color: #3498db;
+    border-color: #007bff;
     font-weight: bold;
 }
 
-/* Styles for map containers */
 .map-container {
-    display: none; /* Hide inactive maps by default */
+    display: none; /* Hide inactive maps */
     width: 100%;
-    min-height: 400px; /* Adjust as needed */
-    border: 1px solid #ccc;
+    flex-grow: 1; /* Allow container to fill vertical space in map-section */
+    min-height: 500px; /* Ensure minimum height for the map */
+    border: 1px solid #dee2e6;
     border-radius: 4px;
-    background-color: #f9f9f9; /* Light background for empty state */
-    overflow: auto; /* Add scrollbars if map content overflows */
+    background-color: #f8f9fa; /* Background while loading */
+    overflow: hidden; /* Hide map overflow */
+    position: relative; /* Needed if map library uses absolute positioning */
 }
 
 .map-container p { /* Style placeholder text */
-    color: #666;
+    padding: 20px;
+    color: #6c757d;
     font-style: italic;
+    text-align: center;
 }
 
-/* Show the active map container */
 .map-container.active {
-    display: block; /* Show the active map using block display */
-    /* The iframe inside will fill this block */
+    display: block; /* Show active map */
 }
 
-/* Ensure Folium map iframes render correctly */
-.map-container iframe {
+/* Ensure Folium/Leaflet/Mapbox map renders correctly */
+.map-container iframe,
+.map-container .leaflet-container, /* Add selectors for your specific map library */
+.map-container .mapboxgl-map {
     width: 100%;
     height: 100%;
-    min-height: 400px; /* Match container min-height */
-    border: none; /* Remove iframe border */
-    display: block; /* Override potential display issues */
+    min-height: 500px; /* Match container min-height */
+    border: none;
+    display: block;
 }
 
-
-#loadingIndicator, #errorDisplay {
-     font-style: italic;
-     color: #666;
+/* Sidebar Section Styling */
+.sidebar-section {
+    flex: 1; /* Takes less space than map */
+    min-width: 300px; /* Minimum width before wrapping */
+    background-color: #ffffff;
+    padding: 20px 25px;
+    border-radius: 4px;
+    border: 1px solid #dee2e6;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    height: fit-content; /* Adjust height based on content */
+    max-height: 600px; /* Optional: prevent excessive height */
+    overflow-y: auto; /* Add scroll if content overflows */
 }
-#errorDisplay {
-    color: #e74c3c; /* Red for errors */
+
+#sidebar-content h2 {
+    font-size: 1.2em;
+    color: #343a40;
+    margin-top: 0;
+    margin-bottom: 15px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+}
+#sidebar-content h3 {
+    font-size: 1em;
+    color: #343a40;
+    margin-top: 20px;
+    margin-bottom: 10px;
+}
+#sidebar-content p {
+    margin-bottom: 8px;
+    font-size: 0.95em;
+}
+#sidebar-content strong {
+    font-weight: 600;
+    color: #495057;
+}
+
+.sidebar-links {
+    display: flex;
+    flex-direction: column; /* Stack links vertically */
+    gap: 10px; /* Space between links */
+}
+
+.sidebar-links a {
+    color: #007bff;
+    text-decoration: none;
+    font-size: 0.95em;
+    padding: 5px 0; /* Add some padding for easier clicking */
+}
+
+.sidebar-links a:hover {
+    text-decoration: underline;
+}
+
+/* Loading / Error Indicator Styling (within sidebar) */
+#loadingIndicator {
+    padding: 15px 0;
+    text-align: center;
+    font-style: italic;
+    color: #6c757d;
+}
+#errorDisplay { /* Now uses .error-message class potentially */
+    color: #dc3545; /* Bootstrap danger color */
     font-weight: bold;
-    min-height: 1.2em; /* Prevent layout shift when message appears */
+    background-color: #f8d7da; /* Light red background */
+    border: 1px solid #f5c6cb; /* Reddish border */
+    border-radius: 4px;
+    padding: 10px 15px;
+    margin-bottom: 15px;
+}
+
+/* OPT Table Section Styling */
+.opt-table-section {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+    background-color: #ffffff;
+    padding: 20px 25px;
+    border-radius: 4px;
+    border: 1px solid #dee2e6;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.opt-table-section h2 {
+    font-size: 1.3em;
+    color: #343a40;
+    margin-top: 0;
+    margin-bottom: 15px;
+}
+
+#download-opt-btn { /* Style download button if needed */
+     margin-bottom: 15px;
+     background-color: #28a745; /* Green for download/success action */
+}
+#download-opt-btn:hover {
+     background-color: #218838; /* Darker green */
+}
+
+.opt-table-content-wrapper {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 4px; /* Apply radius to wrapper */
+}
+
+/* Style the actual table generated by JS */
+#opt-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85em; /* Slightly larger perhaps */
+}
+
+#opt-table th,
+#opt-table td {
+    padding: 6px 8px; /* Adjust padding */
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid #dee2e6; /* Use border on bottom of cells */
+}
+
+#opt-table th {
+    background-color: #e9ecef; /* Lighter header background */
+    font-weight: 600;
+    position: sticky; /* Make headers sticky if container scrolls */
+    top: 0;
+}
+
+#opt-table tbody tr:nth-child(even) {
+    background-color: #f8f9fa; /* Zebra striping */
+}
+
+#opt-table tbody tr:hover {
+    background-color: #e2e6ea; /* Hover effect */
+}
+
+/* Placeholder Text */
+#opt-placeholder {
+    padding: 15px;
+    font-style: italic;
+    color: #6c757d;
+    text-align: center;
+}
+
+/* Basic Responsive adjustments */
+@media (max-width: 768px) {
+    .app-header {
+        flex-direction: column;
+        gap: 15px;
+        padding: 15px;
+    }
+    .controls {
+        flex-direction: column;
+        width: 100%;
+        align-items: stretch; /* Make controls full width */
+    }
+    .input-group {
+        min-width: 0; /* Remove min-width */
+    }
+    #getMapButton {
+       align-self: center; /* Center button */
+       width: 50%; /* Give button some width */
+    }
+    .main-content {
+        flex-direction: column; /* Stack map and sidebar */
+    }
+    .map-section, .sidebar-section {
+        flex-basis: auto; /* Reset basis */
+        width: 100%; /* Take full width when stacked */
+    }
+    .sidebar-section {
+         max-height: none; /* Allow sidebar to grow */
+    }
 }

@@ -8,6 +8,8 @@ import traceback
 from mygeotab.exceptions import MyGeotabException # Be specific if possible
 import config # To get Sheet IDs etc.
 import platform
+import re
+import gspread
 
 # --- Geotab Data ---
 def fetch_bus_data(api_client, bus_number, from_date, to_date):
@@ -65,28 +67,14 @@ def fetch_bus_data(api_client, bus_number, from_date, to_date):
 # --- RAS Data (Google Sheets) ---
 
 def _get_ras_data_from_sheet(gspread_client, sheet_id, sheet_name,
-                             date_filter_col, date_filter_value, # date_filter_value can be date obj or string
-                             route_filter_col, route_value):
+                           date_filter_col, date_filter_value, # date_filter_value can be date obj or string
+                           route_filter_col, route_value):
     """
-    Helper to get RAS data from a specific sheet, with added debugging and robust filtering.
-
-    Args:
-        gspread_client: Authenticated gspread client.
-        sheet_id (str): Google Sheet file ID.
-        sheet_name (str): Name of the specific worksheet.
-        date_filter_col (str): Name of the column containing the date to filter on.
-        date_filter_value (datetime.date | str): The date object or specific string to filter by.
-        route_filter_col (str): Name of the column containing the route ID.
-        route_value (str): The route ID string to filter by.
-
-    Returns:
-        tuple: (am_routes_to_buses, pm_routes_to_buses, filtered_rasdf)
-               Returns (None, None, None) on critical error.
-               Returns ({}, {}, pd.DataFrame()) if no data found matching criteria.
+    Helper to get RAS data from a specific sheet, checking filter type BEFORE converting.
     """
     am_routes_to_buses = {}
     pm_routes_to_buses = {}
-    headers = [] # Initialize headers
+    headers = []
 
     if not gspread_client:
         print("ERROR: GSpread client not provided to _get_ras_data_from_sheet.")
@@ -98,88 +86,125 @@ def _get_ras_data_from_sheet(gspread_client, sheet_id, sheet_name,
         rasworksheet = rassheet.worksheet(sheet_name)
         all_data = rasworksheet.get_all_values()
 
-        if not all_data or len(all_data) < 2: # Need at least header + 1 data row
+        if not all_data or len(all_data) < 2:
             print(f"INFO: No data or only headers found in sheet '{sheet_name}'.")
-            return {}, {}, pd.DataFrame()
+            return {}, {}, pd.DataFrame(columns=headers) # Return empty DF with headers if possible
 
         headers = all_data[0]
         data = all_data[1:]
-        rasdf = pd.DataFrame(data, columns=headers)
+        # Load as string initially to prevent incorrect type inference
+        rasdf = pd.DataFrame(data, columns=headers).astype(str)
+        # Replace common non-values with pandas NA
+        rasdf.replace(['None', '', '#N/A', 'nan', 'NaT'], pd.NA, inplace=True) # Added 'nan', 'NaT'
 
-        # --- Extensive Debug Prints Start ---
         print(f"\nDEBUG: Initial rasdf shape for sheet '{sheet_name}': {rasdf.shape}")
-        print(f"DEBUG: Columns: {rasdf.columns.tolist()}")
+        # print(f"DEBUG: Columns: {rasdf.columns.tolist()}") # Optional verbose logging
         print(f"DEBUG: Filtering for Date Col='{date_filter_col}', Date Value='{repr(date_filter_value)}', Route Col='{route_filter_col}', Route Value='{route_value}'")
 
         if date_filter_col not in rasdf.columns:
-            print(f"ERROR: Date filter column '{date_filter_col}' not found in DataFrame!")
-            return None, None, None # Cannot proceed
-
-        print(f"DEBUG: First 5 values in '{date_filter_col}':\n{rasdf[date_filter_col].head().to_string()}")
-
+            print(f"ERROR: Date filter column '{date_filter_col}' not found! Columns are: {rasdf.columns.tolist()}")
+            return None, None, None
         if route_filter_col not in rasdf.columns:
-            print(f"ERROR: Route filter column '{route_filter_col}' not found in DataFrame!")
-            return None, None, None # Cannot proceed
+            print(f"ERROR: Route filter column '{route_filter_col}' not found! Columns are: {rasdf.columns.tolist()}")
+            return None, None, None
 
-        print(f"DEBUG: First 5 values in '{route_filter_col}':\n{rasdf[route_filter_col].head().to_string()}")
-        # --- End initial debug prints ---
+        # print(f"DEBUG: First 5 values in '{date_filter_col}':\n{rasdf[date_filter_col].head().to_string(index=False)}")
+        # print(f"DEBUG: First 5 values in '{route_filter_col}':\n{rasdf[route_filter_col].head().to_string(index=False)}")
 
+        # --- CORRECTED Date Filtering Logic ---
+        filtered_by_date = pd.DataFrame(columns=headers) # Initialize empty with original headers
 
-        # --- Date Conversion and Filtering ---
-        filtered_by_date = pd.DataFrame() # Initialize empty DF
         try:
-            print(f"DEBUG: Attempting conversion of date column: '{date_filter_col}'")
-            original_non_null_dates = rasdf[date_filter_col].notna().sum()
+            # Check the type of the filter value *first*
 
-            # Try specific format first, fallback to inference
-            try:
-              rasdf[date_filter_col] = pd.to_datetime(rasdf[date_filter_col], format='%m/%d/%Y', errors='coerce')
-              print("DEBUG: Used specific format '%m/%d/%Y' for date conversion.")
-            except ValueError: # Fallback if specific format fails for some rows
-              print("DEBUG: Specific format failed, falling back to inference for date conversion.")
-              rasdf[date_filter_col] = pd.to_datetime(rasdf[date_filter_col], errors='coerce')
-
-            rasdf.dropna(subset=[date_filter_col], inplace=True) # Drop rows where conversion failed (became NaT)
-            print(f"DEBUG: Shape after date conversion & dropna: {rasdf.shape} (Original non-null dates: {original_non_null_dates})")
-
-            if rasdf.empty:
-                 print(f"INFO: No rows left after date conversion/dropna for '{date_filter_col}'.")
-                 return {}, {}, pd.DataFrame(columns=headers)
-
-            # Filter by date based on the type of date_filter_value
+            # CASE 1: Input is a date object (flexible, kept for robustness)
             if isinstance(date_filter_value, datetime.date):
-                 print(f"DEBUG: Filtering by date object: {date_filter_value}")
-                 # Compare DATE PART only
-                 filtered_by_date = rasdf[rasdf[date_filter_col].dt.date == date_filter_value]
-            else: # Assume string comparison for current RAS (Weekday- Day format)
-                 print(f"DEBUG: Filtering by date string: {date_filter_value}")
-                 # Ensure exact match for strings
-                 filtered_by_date = rasdf[rasdf[date_filter_col] == date_filter_value]
+                day_format = "%#d" if platform.system() == "Windows" else "%-d"
+                date_str_to_match = date_filter_value.strftime(f"%A-{day_format}")
+                print(f"DEBUG: Filtering by DATE OBJECT {date_filter_value}. Performing direct string comparison using target: '{date_str_to_match}'")
+                # Perform direct string comparison against original DataFrame data (treat column as string)
+                filtered_by_date = rasdf[
+                    rasdf[date_filter_col].astype(str).str.strip() == date_str_to_match
+                ].copy()
 
-            print(f"DEBUG: Shape after date filter: {filtered_by_date.shape}")
+            # CASE 2: Input is a string
+            elif isinstance(date_filter_value, str):
+                date_str_input = date_filter_value.strip()
+                print(f"DEBUG: Filtering by STRING value: '{date_str_input}'")
+
+                # Check if the string matches the "Weekday-Day" pattern (Current RAS)
+                if re.match(r'^[A-Za-z]+-\d+$', date_str_input):
+                    print(f"DEBUG: String '{date_str_input}' matches Weekday-Day pattern. Performing ONLY direct string comparison.")
+                    # Perform ONLY direct string comparison against original DataFrame data (treat column as string)
+                    filtered_by_date = rasdf[
+                        rasdf[date_filter_col].astype(str).str.strip() == date_str_input
+                    ].copy()
+                    # ***** NO pd.to_datetime CONVERSION of rasdf[date_filter_col] here *****
+                else:
+                    # String does NOT look like "Weekday-Day". Assume it might be MM/DD/YYYY etc (Historical RAS). Attempt date logic.
+                    print(f"DEBUG: String '{date_str_input}' does NOT match Weekday-Day pattern. Attempting date logic.")
+                    try:
+                        # Try parsing the INPUT string as a date (allow inference)
+                        target_date = pd.to_datetime(date_str_input, errors='raise').date()
+                        print(f"DEBUG: Parsed input string to date: {target_date}. Attempting conversion of sheet column '{date_filter_col}' for comparison.")
+
+                        # Convert sheet column ON A COPY - only if needed
+                        rasdf_converted = rasdf[[date_filter_col]].copy()
+                        # Let pandas infer format for sheet column conversion here, maybe add dayfirst=True if needed
+                        rasdf_converted[date_filter_col] = pd.to_datetime(rasdf_converted[date_filter_col], errors='coerce')
+                        rasdf_converted.dropna(subset=[date_filter_col], inplace=True) # Remove rows that failed conversion in sheet
+
+                        if not rasdf_converted.empty:
+                            # Filter original DataFrame using indices from converted comparison
+                            matching_indices = rasdf_converted[rasdf_converted[date_filter_col].dt.date == target_date].index
+                            filtered_by_date = rasdf.loc[matching_indices].copy()
+                            print(f"DEBUG: Found {len(matching_indices)} rows matching converted date.")
+                        else:
+                             print(f"DEBUG: Sheet column '{date_filter_col}' resulted in no valid dates after conversion attempt.")
+                             # No match found via date conversion, filtered_by_date remains empty
+
+                    except (ValueError, TypeError) as e:
+                        # Failed to parse input string as a date OR failed during sheet conversion/comparison
+                        print(f"DEBUG: Failed date logic for string '{date_str_input}' ({e}). Falling back to direct string comparison.")
+                        # Fallback: If it wasn't Weekday-Day & not parseable as a standard date, do direct string match anyway
+                        filtered_by_date = rasdf[
+                            rasdf[date_filter_col].astype(str).str.strip() == date_str_input
+                        ].copy()
+            else:
+                print(f"ERROR: Unsupported type for date_filter_value: {type(date_filter_value)}")
+                return None, None, None # Or raise error
+
+            # --- Post-filtering checks ---
+            print(f"DEBUG: Shape after date filter section: {filtered_by_date.shape}")
             if filtered_by_date.empty:
-                 print("DEBUG: No rows matched the date filter.")
-                 # Return empty structures, not None, as this isn't necessarily an error
-                 return {}, {}, pd.DataFrame(columns=headers)
+                print(f"DEBUG: No rows matched the date filter criteria applied for: {repr(date_filter_value)}.")
+                return {}, {}, pd.DataFrame(columns=headers) # Return standard empty result
 
         except Exception as date_err:
-             print(f"ERROR converting or filtering date column '{date_filter_col}': {date_err}")
-             return None, None, None # Indicate error occurred
+            print(f"ERROR during date filtering logic: {date_err}")
+            import traceback
+            traceback.print_exc()
+            return None, None, None
 
 
         # --- Route Filtering ---
-        final_filtered = pd.DataFrame() # Initialize empty DF
+        # (Code remains the same)
+        final_filtered = pd.DataFrame()
         try:
-            print(f"DEBUG: Filtering date-filtered data by route: '{route_value}'")
-            if route_filter_col not in filtered_by_date.columns:
-                 print(f"ERROR: Route column '{route_filter_col}' not found after date filtering.")
-                 return None, None, None
+            print(f"DEBUG: Filtering date-filtered data ({filtered_by_date.shape[0]} rows) by route: '{route_value}' in column '{route_filter_col}'")
+            if filtered_by_date.empty:
+                print("DEBUG: Skipping route filtering as date filtering yielded no results.")
+                return {}, {}, pd.DataFrame(columns=headers)
 
-            # Add .str.strip() to handle potential whitespace in sheet data or input route_value
+            if route_filter_col not in filtered_by_date.columns:
+                print(f"ERROR: Route column '{route_filter_col}' not found in the date-filtered DataFrame. Columns: {filtered_by_date.columns.tolist()}")
+                return None, None, None
+
             route_value_stripped = str(route_value).strip()
+            # Ensure comparison column is treated as string and stripped
             final_filtered = filtered_by_date[
                 filtered_by_date[route_filter_col].astype(str).str.strip() == route_value_stripped
-            ].copy() # Use .copy() to avoid SettingWithCopyWarning
+            ].copy()
             print(f"DEBUG: Shape after route filter: {final_filtered.shape}")
 
         except Exception as route_err:
@@ -188,44 +213,50 @@ def _get_ras_data_from_sheet(gspread_client, sheet_id, sheet_name,
 
         # --- Assign final filtered DataFrame for processing ---
         filtered_rasdf = final_filtered
-
         if filtered_rasdf.empty:
             print(f"INFO: No RAS data found for route {route_value} matching date criteria {repr(date_filter_value)} in sheet {sheet_name} after ALL filters.")
-            return {}, {}, pd.DataFrame(columns=headers) # Return empty structures
+            return {}, {}, pd.DataFrame(columns=headers)
 
         print(f"DEBUG: Found {len(filtered_rasdf)} row(s) after all filters.")
 
-        # --- Process AM/PM vehicles from the successfully filtered data ---
-        # Determine indices based on headers (more robust than hardcoding indices)
         try:
-            route_col_idx = headers.index(route_filter_col) # Usually 'Route'
-            trip_type_col_idx = headers.index('Trip Type') # Assuming column 'Trip Type' exists
-            vehicle_col_idx = headers.index('Vehicle#')    # Assuming column 'Vehicle#' exists
-        except ValueError as e:
-            print(f"ERROR: Missing expected column in RAS headers: {e}. Headers are: {headers}")
-            return None, None, None # Cannot process vehicles
 
-        for _, row_series in filtered_rasdf.iterrows():
-             # Convert Series to list or dict to access by index safely
-             row = row_series.tolist()
-             route = str(row[route_col_idx]).strip()
-             am_pm = str(row[trip_type_col_idx]).strip().upper() # Ensure uppercase for comparison
-             vehicle_number = str(row[vehicle_col_idx]).strip()
+            for _, row_series in filtered_rasdf.iterrows():
+                 # Check if expected columns exist first
+                if not all(col in row_series.index for col in [route_filter_col, 'Trip Type', 'Vehicle#']):
+                     print(f"WARN: Skipping row due to missing columns. Index: {_}, Columns: {row_series.index.tolist()}")
+                     continue
 
-             # Check if vehicle number is valid before processing
-             if vehicle_number and vehicle_number.lower() != 'nan' and vehicle_number.lower() != '':
-                 # Add leading zero if 3 digits
-                 if len(vehicle_number) == 3 and vehicle_number.isdigit():
-                     vehicle_number = '0' + vehicle_number
+                route = str(row_series[route_filter_col]).strip()
+                am_pm = str(row_series['Trip Type']).strip().upper()
+                vehicle_number = str(row_series['Vehicle#']).strip()
 
-                 # Add 'NT' prefix (Ensure it's appropriate)
-                 # Consider if prefix is always NT or depends on data
-                 vehicle_full = 'NT' + vehicle_number
+                if vehicle_number and vehicle_number.lower() not in ('nan', '', 'none', '#n/a'):
+                    if isinstance(vehicle_number, str) and vehicle_number.endswith('.0'): # Handle '1234.0'
+                         vehicle_number = vehicle_number[:-2]
 
-                 if am_pm == "AM":
-                     am_routes_to_buses[route] = vehicle_full
-                 elif am_pm == "PM":
-                     pm_routes_to_buses[route] = vehicle_full
+                    if len(vehicle_number) == 3 and vehicle_number.isdigit():
+                        vehicle_number = '0' + vehicle_number
+
+                    vehicle_full = 'NT' + vehicle_number # Assuming NT prefix is correct
+
+                    if route: # Don't add if route is empty
+                       if am_pm == "AM":
+                           am_routes_to_buses[route] = vehicle_full
+                       elif am_pm == "PM":
+                           pm_routes_to_buses[route] = vehicle_full
+                    else:
+                        print(f"WARN: Skipping row due to empty route. Index: {_}")
+
+        except (KeyError, ValueError, IndexError) as proc_key_err: # Catch potential errors more specifically
+             print(f"ERROR: Problem accessing columns during vehicle processing: {proc_key_err}. Check headers/data.")
+             # Depending on severity, maybe return partial data or None
+             return None, None, None
+        except Exception as proc_err:
+             print(f"ERROR: Unexpected error during vehicle processing: {proc_err}")
+             traceback.print_exc()
+             return None, None, None
+
 
         print(f"DEBUG: AM Vehicles Found: {am_routes_to_buses}")
         print(f"DEBUG: PM Vehicles Found: {pm_routes_to_buses}")
@@ -239,9 +270,10 @@ def _get_ras_data_from_sheet(gspread_client, sheet_id, sheet_name,
     except Exception as e:
         print(f"ERROR: Unexpected error in _get_ras_data_from_sheet for {sheet_name}: {e}")
         import traceback
-        traceback.print_exc() # Print full traceback for unexpected errors
+        traceback.print_exc()
         return None, None, None
 
+# --- End of _get_ras_data_from_sheet ---
 # Remember to also have the get_current_ras_data and get_historical_ras_data functions
 # in data_sources.py which call this _get_ras_data_from_sheet helper.
 

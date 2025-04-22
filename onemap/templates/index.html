@@ -5,60 +5,71 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OneMap by NYCSBUS</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
+    </head>
 <body>
 
-    <div class="container">
-        <h1>OneMap by NYCSBUS</h1>
+    <div class="page-container">
 
-        <div class="input-section">
-            <div class="input-group">
-                <label for="routeInput">Route:</label>
-                <input type="text" id="routeInput" name="route" placeholder="Enter route number or name">
+        <header class="app-header">
+            <div class="logo-title">
+                <h1>OneMap by NYCSBUS</h1>
             </div>
-
-            <div class="input-group">
-                <label for="dateInput">Date:</label>
-                <input type="date" id="dateInput" name="date">
+            <div class="controls">
+                <div class="input-group">
+                    <label for="routeInput">Route:</label>
+                    <input type="text" id="routeInput" name="route" placeholder="Enter route">
+                </div>
+                <div class="input-group">
+                    <label for="dateInput">Date:</label>
+                    <input type="date" id="dateInput" name="date">
+                </div>
+                <button type="button" id="getMapButton">Get Map</button>
             </div>
+        </header>
 
-            <button type="button" id="getMapButton">Get Map</button>
-        </div>
+        <main class="main-content">
 
-        <div id="mapDisplayArea">
-             <div class="map-toggle-buttons">
-                <button type="button" id="showAmButton" class="toggle-button active">Show AM Map</button>
-                <button type="button" id="showPmButton" class="toggle-button">Show PM Map</button>
+            <section class="map-section">
+                <div class="map-toggles">
+                    <button type="button" id="showAmButton" class="toggle-button active">AM</button>
+                    <button type="button" id="showPmButton" class="toggle-button">PM</button>
+                </div>
+                <div id="amMapContainer" class="map-container active">
+                    <p>Enter route and date, then click "Get Map". AM map will appear here.</p>
+                </div>
+                <div id="pmMapContainer" class="map-container">
+                    <p>PM Map will appear here.</p>
+                </div>
+            </section>
+
+            <aside class="sidebar-section">
+                <div id="loadingIndicator" style="display: none;">Loading...</div>
+                <div id="errorDisplay" class="error-message" style="display: none;"></div>
+
+                <div id="sidebar-content">
+                    <h2 id="sidebar-title">Trip Details</h2>
+                    <p><strong>Vehicle:</strong> <span id="sidebar-vehicle">--</span></p>
+                    <p><strong>Route:</strong> <span id="sidebar-route">--</span></p>
+                    <hr>
+                    <h3>Links</h3>
+                    <div class="sidebar-links">
+                         <a href="#" id="dviLink" target="_blank" style="opacity: 0.5;">DVI</a>
+                         <a href="#" id="optLink">OPT Information</a>
+                         <a href="#" id="fleetioLink" target="_blank" style="opacity: 0.5;">Fleetio Link</a>
+                    </div>
+                </div>
+            </aside>
+
+        </main>
+
+        <section id="optTableContainer" class="opt-table-section" style="display: none;">
+            <h2>OPT Data Details</h2>
+            <button id="download-opt-btn" style="display: none; margin-bottom: 10px;">Download OPT Info as CSV</button>
+            <div id="optTableContent" class="opt-table-content-wrapper">
+                <p id="opt-placeholder" style="padding: 10px; font-style: italic; color: #666;">OPT details will load here when link is clicked.</p>
             </div>
+        </section>
 
-             <div id="loadingIndicator" style="display: none; text-align: center; padding: 20px;">Loading map data...</div>
-            <div id="errorDisplay" style="display: none; color: red; text-align: center; padding: 10px;"></div>
-
-            <div id="amMapContainer" class="map-container active">
-                <p>Enter route and date, then click "Get Map". AM map will appear here.</p>
-            </div>
-            <div id="pmMapContainer" class="map-container">
-                <p>PM Map will appear here.</p>
-            </div>
-        </div>
-
-            <div id="optTableContainer" style="display: none; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-                <h2>OPT Data Details</h2>
-    
-                <button id="download-opt-btn" style="display: none; margin-bottom: 10px;">Download OPT Info as CSV</button>
-                <div id="optTableContent" style="max-height: 400px; overflow-y: auto; border: 1px solid #eee;">
-                     <p id="opt-placeholder" style="padding: 10px; font-style: italic; color: #666;">Click "OPT Information" link elsewhere to load details.</p>
-                     </div>
-            </div>
-        </div>
-        <div class="info-links">
-            <a href="#" id="dviLink" style="opacity: 0.5;">DVI</a>
-            <a href="#" id="fleetioLink">Fleetio Information</a>
-             <a href="javascript:void(0);" id="optLink">OPT Information</a>
-        </div>
-    </div>
-
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
-
-</body>
+    </div><script src="{{ url_for('static', filename='script.js') }}"></script>
+    </body>
 </html>
