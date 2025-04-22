@@ -7,6 +7,7 @@ import psycopg2.extras
 import traceback
 from mygeotab.exceptions import MyGeotabException # Be specific if possible
 import config # To get Sheet IDs etc.
+import platform
 
 # --- Geotab Data ---
 def fetch_bus_data(api_client, bus_number, from_date, to_date):
@@ -244,23 +245,48 @@ def _get_ras_data_from_sheet(gspread_client, sheet_id, sheet_name,
 # Remember to also have the get_current_ras_data and get_historical_ras_data functions
 # in data_sources.py which call this _get_ras_data_from_sheet helper.
 
-def get_current_ras_data(gspread_client, input_date_str_mmddyyyy, route):
-    """Fetches current RAS data."""
-    # Date format in current sheet is "Weekday- Day" (e.g., "Monday- 14")
-    try:
-        input_date = datetime.datetime.strptime(input_date_str_mmddyyyy, "%m/%d/%Y")
-        formatted_date = input_date.strftime("%A- %-d") # Linux/Mac: %-d; Windows: %#d
-    except ValueError:
-        print(f"ERROR: Invalid date format for current RAS: {input_date_str_mmddyyyy}")
+def get_current_ras_data(gspread_client, input_date_obj, route):
+    """
+    Fetches RAS data from the 'Week Sheet' for a specific date.
+    It converts the input date object into a 'Weekday-Day' string format
+    (e.g., 'Tuesday-22') for filtering against the sheet.
+
+    Args:
+        gspread_client: Authenticated gspread client.
+        input_date_obj (datetime.date | datetime.datetime): The specific date object
+                                                            to filter by.
+        route (str): The route ID string to filter by.
+
+    Returns:
+        tuple: Result from _get_ras_data_from_sheet.
+    """
+    # --- Input Validation ---
+    if isinstance(input_date_obj, datetime.datetime):
+        # Extract date part if a datetime object is passed
+        input_date_obj = input_date_obj.date()
+    elif not isinstance(input_date_obj, datetime.date):
+        # Error if it's not a date or datetime object
+        print(f"ERROR: Invalid input_date_obj type for get_current_ras_data. Expected datetime.date or datetime.datetime, got {type(input_date_obj)}")
+        # Consider raising TypeError("Input must be a date or datetime object")
         return None, None, None
 
+
+    day_format = "%#d" if platform.system() == "Windows" else "%-d"
+    # Format the date object into the required "Weekday-Day" string
+    date_str_to_filter = input_date_obj.strftime(f"%A-{day_format}") # e.g., "Tuesday-22"
+    print(date_str_to_filter)
+
+    print(f"INFO: Fetching current RAS data for date: {input_date_obj} (formatted as: '{date_str_to_filter}') and route: {route}")
+
+    # --- Call Helper Function ---
+    # Pass the *formatted string* as the date_filter_value
     return _get_ras_data_from_sheet(
         gspread_client,
         config.CURRENT_RAS_SHEET_ID,
         "Week Sheet",
-        date_filter_col='Date', # Assuming column name is 'Date'
-        date_filter_value=formatted_date,
-        route_filter_col='Route', # Assuming column name is 'Route'
+        date_filter_col='Date',       # Column in sheet assumed to contain "Weekday-Day" strings
+        date_filter_value=date_str_to_filter, # Pass the formatted string
+        route_filter_col='Route',
         route_value=route
     )
 
@@ -347,10 +373,6 @@ def get_opt_dump_data(db_connection_func, route, date_input):
             print("INFO: Database connection closed.")
 
 
-# --- Google Drive File Finder ---
-# Example structure in data_sources.py
-import datetime
-# other imports...
 
 def find_drive_file(drive_service, root_folder_id, depot, date_str_ymd, route, drive_id):
     """Finds a specific file in Google Drive."""

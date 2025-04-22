@@ -18,6 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const optLinkElement = document.getElementById('optLink');
     const optTableContainer = document.getElementById('optTableContainer');
     const optTableContent = document.getElementById('optTableContent');
+    const downloadOptButton = document.getElementById('download-opt-btn'); // <<< ADD THIS
+
 
     // --- Variable to store fetched OPT data ---
     let currentOptData = null;
@@ -36,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!optLinkElement) { console.error("DEBUG ERROR: OPT Link element (id='optLink') not found!"); }
     if (!optTableContainer) { console.error("DEBUG ERROR: OPT Table container (id='optTableContainer') not found!"); }
     if (!optTableContent) { console.error("DEBUG ERROR: OPT Table content div (id='optTableContent') not found!"); }
+    if (!downloadOptButton) { console.warn("DEBUG WARN: Download OPT button (id='download-opt-btn') not found!"); } // <<< ADD THIS CHECK
     // --- End Debugging Checks ---
 
 
@@ -67,6 +70,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (optTableContainer) optTableContainer.style.display = 'none'; // Hide table
         if (optTableContent) optTableContent.innerHTML = ''; // Clear old table content
         console.log("DEBUG: Reset OPT data and table display");
+
+        if (downloadOptButton) downloadOptButton.style.display = 'none'; // Hide it
+        // if (downloadOptButton) downloadOptButton.disabled = true; // Or disable it
+        console.log("DEBUG: Reset OPT download button display");
+
 
 
         // --- UI Updates: Clear previous state, show loading ---
@@ -225,6 +233,13 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
          console.error("DEBUG ERROR: OPT Link element not found, cannot attach click listener.");
     }
+    if (downloadOptButton) { // Check if button exists
+     downloadOptButton.addEventListener('click', function() {
+        console.log("DEBUG: Download OPT button clicked");
+        // Call the download function, passing the table ID generated in displayOptTable
+        downloadTableAsCSV('opt-table', 'opt_information.csv');
+     });
+    }
 
 
     // --- Helper Functions ---
@@ -266,38 +281,177 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Function to Generate and Display OPT Table ---
+        // --- Function to Generate and Display OPT Table ---
     function displayOptTable() {
-        if (!optTableContainer || !optTableContent) {
-             console.error("DEBUG ERROR: Cannot display OPT table, container elements missing.");
-             return;
+            if (!optTableContainer || !optTableContent) {
+                console.error("DEBUG ERROR: Cannot display OPT table, container elements missing.");
+                return;
+            }
+            const downloadBtn = document.getElementById('download-opt-btn');
+
+            if (currentOptData && Array.isArray(currentOptData) && currentOptData.length > 0) {
+                console.log("DEBUG: Generating OPT table from stored data");
+
+                // **** 1. DEFINE Your Desired Columns and Order ****
+                // List the exact keys from your data objects you want to include,
+                // in the order you want them to appear.
+                // Example: Adjust this array to your needs.
+                const desiredColumns = [
+                    'seg_no',
+                    'School_Code_&_Name',
+                    'hndc_code',
+                    'pupil_id_no',
+                    'first_name',
+                    'last_name',
+                    'address',
+                    'zip',
+                    'ph',
+                    'amb_cd',
+                    'sess_beg',
+                    'sess_end',
+                    'med_alert',
+                    'am',
+                    'pm'
+                ];
+              
+                const firstRowKeys = Object.keys(currentOptData[0]);
+                const missingColumns = desiredColumns.filter(col => !firstRowKeys.includes(col));
+                if (missingColumns.length > 0) {
+                     console.warn("DEBUG WARN: Some desired columns not found in data:", missingColumns);
+                     // Decide how to handle this - maybe filter desiredColumns or show a message?
+                     // For now, we'll proceed with potentially empty cells for missing keys.
+                }
+
+
+                // **** 2. Build Table using desiredColumns ****
+                // Add id="opt-table" for the download function to find it
+                let tableHTML = '<table id="opt-table" border="1" style="width:100%; border-collapse: collapse; font-size: 0.8em;">';
+
+                // --- Build Headers ---
+                tableHTML += '<thead><tr style="background-color: #f2f2f2;">';
+                // Iterate through your desiredColumns array for headers
+                desiredColumns.forEach(header => {
+                    tableHTML += `<th style="padding: 4px; text-align: left;">${header}</th>`;
+                });
+                tableHTML += '</tr></thead>';
+
+                // --- Build Body Rows ---
+                tableHTML += '<tbody>';
+                currentOptData.forEach((row, index) => { // Iterate through each data row object
+                    const rowStyle = index % 2 === 0 ? '' : 'background-color: #f9f9f9;';
+                    tableHTML += `<tr style="${rowStyle}">`;
+                    // Iterate through your desiredColumns array again to control cell order and content
+                    desiredColumns.forEach(columnKey => {
+                        // Get the value from the current data row using the key from desiredColumns
+                        const value = row[columnKey] !== null && row[columnKey] !== undefined ? row[columnKey] : '';
+                        // Escape the value for HTML display
+                        const escapedValue = String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                        tableHTML += `<td style="padding: 4px; vertical-align: top;">${escapedValue}</td>`;
+                    });
+                    tableHTML += '</tr>';
+                });
+                tableHTML += '</tbody></table>';
+                // **** End Table Build ****
+
+
+                optTableContent.innerHTML = tableHTML; // Display the table
+                optTableContainer.style.display = 'block'; // Show the container
+
+                // Show/Enable the download button
+                if (downloadBtn) {
+                    downloadBtn.style.display = 'inline-block';
+                    console.log("DEBUG: Showing Download OPT button");
+                }
+
+            } else {
+                // Handle case where there is no OPT data
+                console.log("DEBUG: No OPT data available to display in table.");
+                optTableContent.innerHTML = '<p style="padding: 10px; font-style: italic; color: #666;">No OPT data details available for the selected route and date.</p>';
+                optTableContainer.style.display = 'block';
+
+                 // Hide/Disable the download button
+                 if (downloadBtn) {
+                    downloadBtn.style.display = 'none';
+                    console.log("DEBUG: Hiding Download OPT button (no data)");
+                }
+            }
+        }
+    // --- Function to Download Table Data as CSV ---
+    function downloadTableAsCSV(tableId, filename) {
+        // Ensure filename is provided, default if not
+        filename = filename || 'download.csv'; // Sets a default filename
+
+        const table = document.getElementById(tableId);
+        if (!table) {
+            // Check if the table exists
+            console.error('Table with ID "' + tableId + '" not found.');
+            alert('Error: Could not find the table to download.');
+            return; // Stop if table not found
         }
 
-        if (currentOptData && Array.isArray(currentOptData) && currentOptData.length > 0) {
-            console.log("DEBUG: Generating OPT table from stored data:", currentOptData);
-            const headers = Object.keys(currentOptData[0]);
-            let tableHTML = '<table border="1" style="width:100%; border-collapse: collapse; font-size: 0.8em;">';
-            tableHTML += '<thead><tr style="background-color: #f2f2f2;">';
-            headers.forEach(header => { tableHTML += `<th style="padding: 4px; text-align: left;">${header}</th>`; });
-            tableHTML += '</tr></thead>';
-            tableHTML += '<tbody>';
-            currentOptData.forEach((row, index) => {
-                const rowStyle = index % 2 === 0 ? '' : 'background-color: #f9f9f9;';
-                tableHTML += `<tr style="${rowStyle}">`;
-                headers.forEach(header => {
-                    const value = row[header] !== null && row[header] !== undefined ? row[header] : '';
-                    const escapedValue = String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-                    tableHTML += `<td style="padding: 4px; vertical-align: top;">${escapedValue}</td>`;
-                });
-                tableHTML += '</tr>';
-            });
-            tableHTML += '</tbody></table>';
-            optTableContent.innerHTML = tableHTML;
-            optTableContainer.style.display = 'block';
+        let csv = []; // Array to hold each row of CSV data
+        const rows = table.querySelectorAll("tr"); // Get all table rows (header and body)
+
+        // --- Helper function to properly escape data for CSV format ---
+        const escapeCSV = function(cellData) {
+            if (cellData == null) { // Handle null or undefined values
+               return '';
+            }
+            let data = cellData.toString(); // Ensure data is a string
+            // If data contains comma, newline, or double quote, needs escaping
+            if (data.search(/("|,|\n)/g) >= 0) {
+                // Enclose in double quotes and escape existing double quotes by doubling them
+                data = '"' + data.replace(/"/g, '""') + '"';
+            }
+            return data; // Return processed data
+        };
+
+        // --- Loop through each row (<tr>) in the table ---
+        for (let i = 0; i < rows.length; i++) {
+            const row = [], cols = rows[i].querySelectorAll("td, th"); // Get cells (<td> or <th>) in the current row
+
+            // --- Loop through each cell in the current row ---
+            for (let j = 0; j < cols.length; j++) {
+                // Extract text content (innerText usually reflects displayed text better)
+                let cellText = cols[j].innerText || cols[j].textContent;
+                // Escape the text and add it to the current row array
+                row.push(escapeCSV(cellText.trim()));
+            }
+
+            // Join the cells in the row with commas and add to the main csv array
+            csv.push(row.join(","));
+        } // --- End of row loop ---
+
+        // **** THIS IS THE CRITICAL LINE that defines csvContent ****
+        // Join all the processed rows together with newline characters
+        const csvContent = csv.join("\n");
+        // **** Make sure this line exists and is spelled correctly ****
+
+        // --- Trigger the file download ---
+        // Create a Blob (binary large object) with the CSV data.
+        // Include BOM (\uFEFF) for better Excel compatibility with UTF-8.
+        const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+
+        // Create a temporary anchor element (link) to trigger download
+        const link = document.createElement("a");
+
+        // Check if the browser supports the 'download' attribute
+        if (link.download !== undefined) {
+            // Create a temporary URL for the blob object
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url); // Set link's href to the blob URL
+            link.setAttribute("download", filename); // Set the desired filename
+            link.style.visibility = 'hidden'; // Make the link invisible
+            document.body.appendChild(link); // Add the link to the document
+            link.click(); // Programmatically click the link to start download
+            document.body.removeChild(link); // Remove the link from the document
+            URL.revokeObjectURL(url); // Release the blob URL resource
         } else {
-            console.log("DEBUG: No OPT data available to display in table.");
-            optTableContent.innerHTML = '<p>No OPT data details available for the selected route and date.</p>';
-            optTableContainer.style.display = 'block';
+            // Fallback for older browsers that don't support 'download'
+            console.warn("Download attribute not supported. Opening data URI.");
+            // This might open the CSV in a new tab instead of downloading
+            window.open('data:text/csv;charset=utf-8,' + encodeURIComponent("\uFEFF" + csvContent));
         }
-    }
+    } // --- End of downloadTableAsCSV function ---
 
 }); // End DOMContentLoaded

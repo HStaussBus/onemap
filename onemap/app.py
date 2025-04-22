@@ -106,12 +106,61 @@ def get_map_data():
         # 2. Fetch RAS Data
         print("Fetching RAS data...")
         today = datetime.date.today(); current_monday = today - datetime.timedelta(days=today.weekday())
-        current_ras_date_format = date_obj.strftime("%A- %-d")
+        #current_ras_date_format = date_obj.strftime("%A- %-d")
         am_routes_to_buses, pm_routes_to_buses = {}, {}
         if date_obj >= current_monday:
-            am_routes_to_buses, pm_routes_to_buses, rasdf = data_sources.get_current_ras_data(gspread_client, current_ras_date_format, route_input)
+            # --- Call Current RAS ---
+            # Needs date string in MM/DD/YYYY format for strptime inside it
+            try:
+                date_str_for_current_ras = date_obj.strftime("%m/%d/%Y")
+                print(f"INFO: Calling get_current_ras_data with date string: {date_str_for_current_ras}") # Debug
+                # Call function, handle potential None return values if it fails
+                result_tuple = data_sources.get_current_ras_data(
+                    gspread_client,
+                    date_obj, # Pass MM/DD/YYYY string
+                    route_input
+                )
+                # Safely unpack results, assuming function returns tuple (dict, dict, df) or None
+                if result_tuple and len(result_tuple) == 3:
+                     am_routes_to_buses, pm_routes_to_buses, rasdf = result_tuple
+                     if am_routes_to_buses is None: am_routes_to_buses = {} # Ensure dict type
+                     if pm_routes_to_buses is None: pm_routes_to_buses = {} # Ensure dict type
+                else:
+                     print("WARNING: get_current_ras_data did not return expected tuple.")
+                     # Keep defaults (empty dicts, None df)
+
+            except Exception as e:
+                 print(f"ERROR calling get_current_ras_data: {e}")
+                 # Keep defaults (empty dicts, None df)
         else:
-            am_routes_to_buses, pm_routes_to_buses, rasdf = data_sources.get_historical_ras_data(gspread_client, date_obj, route_input)
+            # --- Call Historical RAS ---
+            # Assuming historical function correctly takes the date object
+            try:
+                print(f"INFO: Calling get_historical_ras_data with date object: {date_obj}") # Debug
+                # Call function, handle potential None return values
+                result_tuple = data_sources.get_historical_ras_data(
+                    gspread_client,
+                    date_obj, # Pass the date object
+                    route_input
+                )
+                # Safely unpack results
+                if result_tuple and len(result_tuple) == 3:
+                     am_routes_to_buses, pm_routes_to_buses, rasdf = result_tuple
+                     if am_routes_to_buses is None: am_routes_to_buses = {} # Ensure dict type
+                     if pm_routes_to_buses is None: pm_routes_to_buses = {} # Ensure dict type
+                else:
+                     print("WARNING: get_historical_ras_data did not return expected tuple.")
+                     # Keep defaults
+
+            except Exception as e:
+                 print(f"ERROR calling get_historical_ras_data: {e}")
+                 # Keep defaults
+
+        # --- Check results after the if/else block ---
+        # print(f"DEBUG: AM routes count: {len(am_routes_to_buses)}")
+        # print(f"DEBUG: PM routes count: {len(pm_routes_to_buses)}")
+        # print(f"DEBUG: RAS DataFrame is None: {rasdf is None}")
+
 
         if rasdf is None: return jsonify({"error": "Failed to retrieve RAS data due to server error."}), 500
         depot = None
