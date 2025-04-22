@@ -4,7 +4,8 @@
     version: 1.0
 
     # Defines the runtime environment for the application.
-    runtime: python3.11 # Make sure this matches your desired Python version
+    # Use the hyphenated format which is commonly supported.
+    runtime: python-3.11 # Make sure this matches your desired Python version
 
     # Defines the build process commands.
     build:
