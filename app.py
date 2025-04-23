@@ -9,6 +9,14 @@ import auth_clients
 import data_sources
 import processing
 import map_plotting
+import ssl
+
+context = ssl.create_default_context()
+
+if hasattr(ssl, 'OP_ENABLE_MIDDLEBOX_COMPAT'):
+    context.options |= ssl.OP_ENABLE_MIDDLEBOX_COMPAT
+else:
+    print("OP_ENABLE_MIDDLEBOX_COMPAT not available in this environment, skipping...")
 
 app = Flask(__name__)
 
