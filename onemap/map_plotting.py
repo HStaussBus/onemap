@@ -387,16 +387,15 @@ def plot_route_updated(route_data, vehicle_data, polyline, mapbox_token):
             valid_points_for_bounds))) >= 2:  # Need at least 2 distinct points
         try:
             print(
-                f"INFO: Fitting map bounds to {len(valid_points_for_bounds)} valid points..."
+                f"INFO: Fitting map bounds to {len(valid_points_for_bounds)} valid points... {valid_points_for_bounds}"
             )
-            m.fit_bounds(bounds=valid_points_for_bounds,
-                         padding=(0.05, 0.05))  # Slightly less padding
+            m.fit_bounds(bounds=valid_points_for_bounds)  # Slightly less padding
         except Exception as bounds_error:
             print(f"WARNING: Could not fit map bounds: {bounds_error}")
     elif len(valid_points_for_bounds) == 1:
         print("INFO: Only one valid point found, centering map on it...")
         m.location = valid_points_for_bounds[0]
-        m.zoom_start = 15
+        m.zoom_start = 12
     else:
         print(
             "WARNING: No valid points found to fit map bounds. Map remains centered as initially calculated."

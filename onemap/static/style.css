@@ -29,6 +29,7 @@ body {
     padding: 15px 25px; /* Vertical and horizontal padding */
     background-color: #ffffff; /* White background */
     border-bottom: 1px solid #dee2e6; /* Subtle border */
+    margin-top: 25px; /* Space below header */
     margin-bottom: 25px; /* Space below header */
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); /* Subtle shadow */
 }
@@ -117,7 +118,8 @@ button:hover {
 
 .map-toggles {
     text-align: center;
-    margin-bottom: 15px;
+    margin-top: 10px;
+    margin-bottom: 20px;
 }
 
 .toggle-button { /* Reusing existing toggle styles */
@@ -141,15 +143,17 @@ button:hover {
     border-color: #007bff;
     font-weight: bold;
 }
-
-.map-container {
-    display: none; /* Hide inactive maps */
+#mapContainer { /* Target the specific ID */
     width: 100%;
-    flex-grow: 1; /* Allow container to fill vertical space in map-section */
-    min-height: 500px; /* Ensure minimum height for the map */
+    height: 600px; /* Explicit height is crucial for Leaflet */
     border: 1px solid #dee2e6;
     border-radius: 4px;
-    background-color: #f8f9fa; /* Background while loading */
+    background-color: #e9ecef; /* Light background while map tiles load */
+    z-index: 0; /* Ensure map is behind popups etc. if needed */
+}
+.map-container {
+    width: 100%;
+    flex-grow: 1; /* Allow container to fill vertical space in map-section */
     overflow: hidden; /* Hide map overflow */
     position: relative; /* Needed if map library uses absolute positioning */
 }
@@ -161,12 +165,8 @@ button:hover {
     text-align: center;
 }
 
-.map-container.active {
-    display: block; /* Show active map */
-}
-
 /* Ensure Folium/Leaflet/Mapbox map renders correctly */
-.map-container iframe,
+
 .map-container .leaflet-container, /* Add selectors for your specific map library */
 .map-container .mapboxgl-map {
     width: 100%;
@@ -181,13 +181,14 @@ button:hover {
     flex: 1; /* Takes less space than map */
     min-width: 300px; /* Minimum width before wrapping */
     background-color: #ffffff;
-    padding: 20px 25px;
+    padding: 30px 25px;
     border-radius: 4px;
     border: 1px solid #dee2e6;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     height: fit-content; /* Adjust height based on content */
     max-height: 600px; /* Optional: prevent excessive height */
     overflow-y: auto; /* Add scroll if content overflows */
+    margin-top: 60px; /* Space above sidebar */
 }
 
 #sidebar-content h2 {
