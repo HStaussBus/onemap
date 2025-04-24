@@ -143,7 +143,24 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log("DEBUG: DOM Loaded");
     // Get references
     const getMapButton = document.getElementById('getMapButton'); /* ... other refs ... */
-    const routeInput = document.getElementById('routeInput'); const dateInput = document.getElementById('dateInput'); const mapContainer = document.getElementById('mapContainer'); const showAmButton = document.getElementById('showAmButton'); const showPmButton = document.getElementById('showPmButton'); const loadingIndicator = document.getElementById('loadingIndicator'); const errorDisplay = document.getElementById('errorDisplay'); const dviLinkElement = document.getElementById('dviLink'); const optLinkElement = document.getElementById('optLink'); const optTableContainer = document.getElementById('optTableContainer'); const optTableContent = document.getElementById('optTableContent'); const downloadOptButton = document.getElementById('download-opt-btn'); const sidebarTitle = document.getElementById('sidebar-title'); const sidebarVehicleSpan = document.getElementById('sidebar-vehicle'); const sidebarRouteSpan = document.getElementById('sidebar-route');
+    const routeInput = document.getElementById('routeInput'); 
+    const dateInput = document.getElementById('dateInput'); 
+    const mapContainer = document.getElementById('mapContainer'); 
+    const showAmButton = document.getElementById('showAmButton'); 
+    const showPmButton = document.getElementById('showPmButton'); 
+    const loadingIndicator = document.getElementById('loadingIndicator'); 
+    const errorDisplay = document.getElementById('errorDisplay'); 
+    const dviLinkElement = document.getElementById('dviLink'); 
+    const optLinkElement = document.getElementById('optLink'); 
+    const optTableContainer = document.getElementById('optTableContainer'); 
+    const optTableContent = document.getElementById('optTableContent'); 
+    const downloadOptButton = document.getElementById('download-opt-btn'); 
+    const sidebarTitle = document.getElementById('sidebar-title'); 
+    const sidebarVehicleSpan = document.getElementById('sidebar-vehicle'); 
+    const sidebarRouteSpan = document.getElementById('sidebar-route');
+
+    const sidebarDriverNameSpan = document.getElementById('sidebar-driver-name');
+    const sidebarDriverPhoneSpan = document.getElementById('sidebar-driver-phone');
 
     // Initialize Map
     initializeMap();
@@ -151,20 +168,92 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Event Listener for Get Map Button (Keep as is) ---
     getMapButton.addEventListener('click', async () => {
         // ... (keep full implementation: reset UI, fetch, store data, update sidebar, update DVI, call displayMapData, call showAmMap) ...
-        if (!mapInitialized) { displayError("Map initialization failed."); return; } const route = routeInput.value.trim(); const date = dateInput.value; if (!route || !date) { displayError("Please enter both a route and a date."); return; } if(loadingIndicator) loadingIndicator.style.display = 'block'; if(errorDisplay) errorDisplay.style.display = 'none'; if(routeLayer) routeLayer.clearLayers(); if(stopsLayer) stopsLayer.clearLayers(); if(map) map.setView([40.7128, -74.0060], 11); if (dviLinkElement) { dviLinkElement.href = "#"; dviLinkElement.removeAttribute("target"); dviLinkElement.style.opacity = 0.5; } currentOptData = null; if (optTableContainer) optTableContainer.style.display = 'none'; if (optTableContent) optTableContent.innerHTML = ''; if (downloadOptButton) downloadOptButton.style.display = 'none'; if (sidebarTitle) sidebarTitle.textContent = 'Trip Details'; if (sidebarVehicleSpan) sidebarVehicleSpan.textContent = '--'; if (sidebarRouteSpan) sidebarRouteSpan.textContent = '--'; currentAmMapData = null; currentPmMapData = null; currentAmDeviceId = null; currentPmDeviceId = null;
+        if (!mapInitialized) { displayError("Map initialization failed."); 
+                              return; } 
+        const route = routeInput.value.trim(); 
+        const date = dateInput.value; 
+        if (!route || !date) { displayError("Please enter both a route and a date."); 
+                              return; } 
+        if(loadingIndicator) loadingIndicator.style.display = 'block'; 
+        if(errorDisplay) errorDisplay.style.display = 'none'; 
+        if(routeLayer) routeLayer.clearLayers(); 
+        if(stopsLayer) stopsLayer.clearLayers(); 
+        if(map) map.setView([40.7128, -74.0060], 11); 
+        if (dviLinkElement) { dviLinkElement.href = "#"; 
+                             dviLinkElement.removeAttribute("target"); 
+                             dviLinkElement.style.opacity = 0.5; } 
+        currentOptData = null; 
+        if (optTableContainer) optTableContainer.style.display = 'none'; 
+        if (optTableContent) optTableContent.innerHTML = ''; 
+        if (downloadOptButton) downloadOptButton.style.display = 'none'; 
+        if (sidebarTitle) sidebarTitle.textContent = 'Trip Details'; 
+        if (sidebarVehicleSpan) sidebarVehicleSpan.textContent = '--'; 
+        if (sidebarRouteSpan) sidebarRouteSpan.textContent = '--'; 
+        if (sidebarDriverNameSpan) sidebarDriverNameSpan.textContent = '--';
+        if (sidebarDriverPhoneSpan) sidebarDriverPhoneSpan.textContent = '--';
+        currentAmMapData = null; 
+        currentPmMapData = null; 
+        currentAmDeviceId = null; 
+        currentPmDeviceId = null;
         console.log("DEBUG: Starting fetch to /get_map (expecting JSON)");
-        try { const response = await fetch('/get_map', { method: 'POST', headers: { 'Content-Type': 'application/json', }, body: JSON.stringify({ route: route, date: date }), }); if(loadingIndicator) loadingIndicator.style.display = 'none'; if (!response.ok) { let errorMsg = `HTTP error! Status: ${response.status} ${response.statusText}`; try { const errorData = await response.json(); errorMsg = errorData.error || errorMsg; } catch (e) {} throw new Error(errorMsg); } const data = await response.json(); console.log("DEBUG: Received data keys:", data ? Object.keys(data) : "null/undefined");
+        try { 
+            const response = await fetch('/get_map', { method: 'POST', headers: { 'Content-Type': 'application/json', }, body: JSON.stringify({ route: route, date: date }), }); if(loadingIndicator) loadingIndicator.style.display = 'none'; 
+            if (!response.ok) { let errorMsg = `HTTP error! Status: ${response.status} ${response.statusText}`; 
+                               try { const errorData = await response.json(); errorMsg = errorData.error || errorMsg; } catch (e) {} throw new Error(errorMsg); } 
+            const data = await response.json(); 
+            console.log("DEBUG: Received data keys:", data ? Object.keys(data) : "null/undefined");
              currentAmMapData = data.am_map_data; currentPmMapData = data.pm_map_data; currentOptData = data.opt_data; currentAmDeviceId = currentAmMapData?.device_id; currentPmDeviceId = currentPmMapData?.device_id;
-             const initialVehicle = currentAmMapData?.vehicle_number || currentPmMapData?.vehicle_number || '--'; const initialRoute = route || '--'; if (sidebarVehicleSpan) sidebarVehicleSpan.textContent = initialVehicle; if (sidebarRouteSpan) sidebarRouteSpan.textContent = initialRoute;
-             const dviLinkUrl = data.dvi_link; console.log("DEBUG: Received DVI Link from backend:", dviLinkUrl); if (dviLinkElement && dviLinkUrl && dviLinkUrl !== "#") { console.log("DEBUG: Applying valid DVI link"); dviLinkElement.href = dviLinkUrl; dviLinkElement.target = "_blank"; dviLinkElement.style.opacity = 1; } else { if(dviLinkElement) { dviLinkElement.href = "#"; dviLinkElement.removeAttribute("target"); dviLinkElement.style.opacity = 0.5; } }
+            const initialVehicle = currentAmMapData?.vehicle_number || currentPmMapData?.vehicle_number || '--'; 
+            const initialRoute = route || '--'; 
+            const driverName = data.driver_name || 'N/A'; // Get driver_name from response
+            const driverPhone = data.driver_phone || 'N/A'; 
+            if (sidebarVehicleSpan) sidebarVehicleSpan.textContent = initialVehicle; 
+            if (sidebarRouteSpan) sidebarRouteSpan.textContent = initialRoute;
+            if (sidebarDriverNameSpan) sidebarDriverNameSpan.textContent = driverName;
+            if (sidebarDriverPhoneSpan) sidebarDriverPhoneSpan.textContent = driverPhone;
+            const dviLinkUrl = data.dvi_link; console.log("DEBUG: Received DVI Link from backend:", dviLinkUrl); 
+            if (dviLinkElement && dviLinkUrl && dviLinkUrl !== "#") { console.log("DEBUG: Applying valid DVI link"); dviLinkElement.href = dviLinkUrl; dviLinkElement.target = "_blank"; dviLinkElement.style.opacity = 1; } 
+            else { if(dviLinkElement) { dviLinkElement.href = "#"; dviLinkElement.removeAttribute("target"); dviLinkElement.style.opacity = 0.5; } }
              displayMapData(currentAmMapData); showAmMap();
-         } catch (error) { /* ... Error handling ... */ if(loadingIndicator) loadingIndicator.style.display = 'none'; console.error("DEBUG: Error caught:", error); displayError(`Failed to load map data: ${error.message}`); currentAmMapData = null; currentPmMapData = null; currentOptData = null; currentAmDeviceId = null; currentPmDeviceId = null; if (dviLinkElement) { dviLinkElement.href = "#"; dviLinkElement.removeAttribute("target"); dviLinkElement.style.opacity = 0.5; } if (optTableContainer) optTableContainer.style.display = 'none'; if (optTableContent) optTableContent.innerHTML = ''; if (downloadOptButton) downloadOptButton.style.display = 'none'; if (sidebarTitle) sidebarTitle.textContent = 'Trip Details'; if (sidebarVehicleSpan) sidebarVehicleSpan.textContent = '--'; if (sidebarRouteSpan) sidebarRouteSpan.textContent = '--'; if(routeLayer) routeLayer.clearLayers(); if(stopsLayer) stopsLayer.clearLayers(); if(map) map.setView([40.7128, -74.0060], 11); }
+         } catch (error) { /* ... Error handling ... */ 
+            if(loadingIndicator) loadingIndicator.style.display = 'none'; 
+            console.error("DEBUG: Error caught:", error); 
+            displayError(`Failed to load map data: ${error.message}`); 
+            currentAmMapData = null; 
+            currentPmMapData = null; 
+            currentOptData = null; 
+            currentAmDeviceId = null; 
+            currentPmDeviceId = null; 
+            if (dviLinkElement) { dviLinkElement.href = "#"; dviLinkElement.removeAttribute("target"); dviLinkElement.style.opacity = 0.5; } if (optTableContainer) optTableContainer.style.display = 'none'; 
+            if (optTableContent) optTableContent.innerHTML = ''; 
+            if (downloadOptButton) downloadOptButton.style.display = 'none'; 
+            if (sidebarTitle) sidebarTitle.textContent = 'Trip Details'; 
+            if (sidebarVehicleSpan) sidebarVehicleSpan.textContent = '--'; 
+            if (sidebarRouteSpan) sidebarRouteSpan.textContent = '--'; 
+            if(routeLayer) routeLayer.clearLayers(); 
+            if(stopsLayer) stopsLayer.clearLayers(); 
+            if(map) map.setView([40.7128, -74.0060], 11); }
     }); // End getMapButton listener
 
 
     // --- Event Listeners for Toggle Buttons (Keep as is) ---
-    function showAmMap() { /* ... keep implementation ... */ if (!mapInitialized) return; showAmButton.classList.add('active'); showPmButton.classList.remove('active'); displayMapData(currentAmMapData); if (sidebarVehicleSpan) sidebarVehicleSpan.textContent = currentAmMapData?.vehicle_number || '--'; console.log("DEBUG: Switched view to AM Map"); }
-    function showPmMap() { /* ... keep implementation ... */ if (!mapInitialized) return; showPmButton.classList.add('active'); showAmButton.classList.remove('active'); displayMapData(currentPmMapData); if (sidebarVehicleSpan) sidebarVehicleSpan.textContent = currentPmMapData?.vehicle_number || '--'; console.log("DEBUG: Switched view to PM Map"); }
+    function showAmMap() {
+        if (!mapInitialized) return;
+        showAmButton.classList.add('active'); showPmButton.classList.remove('active');
+        displayMapData(currentAmMapData);
+        if (sidebarVehicleSpan) sidebarVehicleSpan.textContent = currentAmMapData?.vehicle_number || '--';
+        // Driver info typically doesn't change between AM/PM view for the same route/date,
+        // so no need to update sidebarDriverNameSpan/sidebarDriverPhoneSpan here unless your data structure changes
+        console.log("DEBUG: Switched view to AM Map");
+    }
+    function showPmMap() {
+        if (!mapInitialized) return;
+        showPmButton.classList.add('active'); showAmButton.classList.remove('active');
+        displayMapData(currentPmMapData);
+        if (sidebarVehicleSpan) sidebarVehicleSpan.textContent = currentPmMapData?.vehicle_number || '--';
+        // Driver info typically doesn't change between AM/PM view for the same route/date
+        console.log("DEBUG: Switched view to PM Map");
+    }
     if (showAmButton && showPmButton) { showAmButton.addEventListener('click', showAmMap); showPmButton.addEventListener('click', showPmMap); }
 
 
