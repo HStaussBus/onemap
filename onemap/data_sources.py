@@ -261,76 +261,155 @@ def get_opt_dump_data(db_connection_func, route, date_input):
 
 # --- Google Drive ---
 # find_drive_file function - CORRECTED SYNTAX
-def find_drive_file(drive_service, root_folder_id, depot, date_str_ymd, route, drive_id):
-    """Finds a specific file in Google Drive."""
-    if not drive_service: print("ERROR: Google Drive service not provided."); return None
-    try: date_obj = datetime.datetime.strptime(date_str_ymd, "%Y-%m-%d")
-    except ValueError: print(f"ERROR: Invalid date format '{date_str_ymd}'. Use YYYY-MM-DD."); return None
-    year_month = date_obj.strftime("%Y-%m"); day_folder = date_obj.strftime("%Y-%m-%d")
-
-    def get_folder_id(service, parent_id, name, drive_id):
-        """Helper to find folder ID by name within a parent."""
-        try:
-            query = (f"'{parent_id}' in parents and name = '{name}' "
-                     f"and mimeType = 'application/vnd.google-apps.folder' "
-                     f"and trashed = false")
-            results = service.files().list(
-                q=query, fields="files(id, name)", corpora="drive",
-                driveId=drive_id, includeItemsFromAllDrives=True,
-                supportsAllDrives=True, pageSize=1
-            ).execute()
-            folders = results.get('files', [])
-            return folders[0]['id'] if folders else None
-        except Exception as e:
-            print(f"ERROR searching for folder '{name}' in Drive: {e}")
-            return None
-
-    depot_name_in_drive = depot.upper()
-    root_folder_id = config.ROOT_FOLDER_ID
-    drive_id = config.DRIVE_ID
-    if not root_folder_id or not drive_id: print("ERROR: ROOT_FOLDER_ID or DRIVE_ID not set."); return None
-
+def _get_folder_id(service, parent_id, name, drive_id_param):
+    """Finds a folder by name within a parent folder."""
     try:
-        print(f"DEBUG Drive Search: Starting search in Root ({root_folder_id}) on Drive ({drive_id})")
-        depot_id = get_folder_id(drive_service, root_folder_id, depot_name_in_drive, drive_id)
-        # *** CORRECTED SYNTAX: Put raise on its own line ***
-        if not depot_id:
-            raise FileNotFoundError(f"Depot folder '{depot_name_in_drive}' not found in root '{root_folder_id}'.")
+        query = (f"'{parent_id}' in parents and name = '{name}' "
+                 f"and mimeType = 'application/vnd.google-apps.folder' "
+                 f"and trashed = false")
+        results = service.files().list(
+            q=query, fields="files(id, name)", corpora="drive",
+            driveId=drive_id_param, includeItemsFromAllDrives=True,
+            supportsAllDrives=True, pageSize=1
+        ).execute()
+        folders = results.get('files', [])
+        if folders:
+            # print(f"DEBUG _get_folder_id: Found folder '{name}' (ID: {folders[0]['id']}) inside parent '{parent_id}'.")
+            return folders[0]['id']
+        else:
+            # print(f"DEBUG _get_folder_id: Folder '{name}' not found inside parent '{parent_id}'.")
+            return None
+    except Exception as e:
+        print(f"ERROR searching for folder '{name}' in Drive parent '{parent_id}': {e}")
+        return None
 
-        month_id = get_folder_id(drive_service, depot_id, year_month, drive_id)
-        # *** CORRECTED SYNTAX: Put raise on its own line ***
-        if not month_id:
-            raise FileNotFoundError(f"Month folder '{year_month}' not found in depot '{depot_name_in_drive}' (ID: {depot_id}).")
-
-        date_id = get_folder_id(drive_service, month_id, day_folder, drive_id)
-        # *** CORRECTED SYNTAX: Put raise on its own line ***
-        if not date_id:
-            raise FileNotFoundError(f"Date folder '{day_folder}' not found in month '{year_month}' (ID: {month_id}).")
-
-        # Search for PDF file
-        route_str_upper = str(route).upper()
-        query = (f"'{date_id}' in parents and mimeType = 'application/pdf' "
-                 f"and name contains '{route_str_upper}' and trashed = false")
-        print(f"DEBUG Drive Search: Querying for PDF with route '{route_str_upper}'...")
-        result = drive_service.files().list(
+# --- Nested Helper Function to Search for PDF ---
+# (Keep this function as it was)
+def _search_pdf_in_date_folder(service, date_folder_id, route_str, drive_id_param):
+    """Searches for a PDF containing the route string within a specific folder."""
+    if not date_folder_id:
+        print("DEBUG _search_pdf: Skipped search as date_folder_id was None.")
+        return None
+    try:
+        query = (f"'{date_folder_id}' in parents and mimeType = 'application/pdf' "
+                 f"and name contains '{route_str}' and trashed = false")
+        print(f"DEBUG Drive Search: Querying for PDF with route '{route_str}' in folder '{date_folder_id}'...")
+        result = service.files().list(
             q=query, fields="files(id, name, webViewLink)", corpora="drive",
-            driveId=drive_id, includeItemsFromAllDrives=True,
-            supportsAllDrives=True, pageSize=10
+            driveId=drive_id_param, includeItemsFromAllDrives=True,
+            supportsAllDrives=True, pageSize=10 # Allow multiple matches
         ).execute()
         files = result.get('files', [])
-
-        # *** CORRECTED SYNTAX: Put raise on its own line ***
-        if not files:
-            raise FileNotFoundError(f"No DVI PDF containing route '{route_str_upper}' found on {date_str_ymd} in folder '{day_folder}'.")
-
-        print(f"INFO: Found DVI file: {files[0]['name']} (ID: {files[0]['id']})")
-        return files[0] # return first matching file info dict
-
-    except FileNotFoundError as e:
-        print(f"INFO: DVI file search path ended: {e}")
-        return None # Return None if not found at any stage
+        if files:
+            print(f"INFO: Found DVI file: {files[0]['name']} (ID: {files[0]['id']})")
+            return files[0] # Return first match
+        else:
+            print(f"DEBUG Drive Search: No PDF found for route '{route_str}' in folder '{date_folder_id}'.")
+            return None
     except Exception as e:
-        print(f"ERROR: Unexpected error finding DVI file: {e}")
-        traceback.print_exc() # Log full traceback
-        return None # Return None on unexpected errors
+        print(f"ERROR searching for PDF in date folder '{date_folder_id}': {e}")
+        return None
+
+# --- Rewritten Main Function ---
+def find_drive_file(drive_service, root_folder_id, depot, date_str_ymd, route, drive_id):
+    """
+    Finds a specific file in Google Drive, checking both folder structures:
+    1. Depot/YYYY-MM/YYYY-MM-DD
+    2. Depot/YYYY-MM-DD
+
+    Args:
+        drive_service: Authorized Google Drive service instance.
+        root_folder_id: The ID of the parent folder containing the depot folders.
+        depot: The name of the depot folder (e.g., 'SHARROTTS').
+        date_str_ymd: The date string in 'YYYY-MM-DD' format.
+        route: The route identifier (string) expected in the filename.
+        drive_id: The ID of the Shared Drive to search within.
+
+    Returns:
+        A dictionary containing file info (id, name, webViewLink) if found, otherwise None.
+    """
+    print(f"--- find_drive_file called: Depot='{depot}', Date='{date_str_ymd}', Route='{route}' ---") # Entry point log
+
+    # --- Input Validation and Setup ---
+    if not drive_service:
+        print("ERROR find_drive_file: Google Drive service not provided.")
+        return None
+    if not root_folder_id or not drive_id:
+        print("ERROR find_drive_file: root_folder_id or drive_id not provided.")
+        return None
+    try:
+        date_obj = datetime.datetime.strptime(date_str_ymd, "%Y-%m-%d")
+    except ValueError:
+        print(f"ERROR find_drive_file: Invalid date format '{date_str_ymd}'. Use YYYY-MM-DD.")
+        return None
+
+    year_month = date_obj.strftime("%Y-%m")
+    day_folder = date_obj.strftime("%Y-%m-%d")
+    route_str_upper = str(route).upper()
+    depot_name_in_drive = depot.upper()
+    pdf_info = None # Variable to store the result if found
+
+    # --- Main Search Logic ---
+    try:
+        print(f"DEBUG find_drive_file: Starting search in Root ('{root_folder_id}') on Drive ('{drive_id}') for Depot '{depot_name_in_drive}'")
+        depot_id = _get_folder_id(drive_service, root_folder_id, depot_name_in_drive, drive_id)
+
+        if not depot_id:
+            print(f"INFO find_drive_file: Depot folder '{depot_name_in_drive}' not found in root '{root_folder_id}'.")
+            return None # Cannot proceed without depot
+
+        # --- Attempt Path 1: Depot -> YYYY-MM -> YYYY-MM-DD ---
+        print(f"DEBUG find_drive_file: === Trying Path 1 (Depot -> {year_month} -> {day_folder}) ===")
+        month_id = _get_folder_id(drive_service, depot_id, year_month, drive_id)
+        if month_id:
+            print(f"DEBUG find_drive_file: Path 1: Found month folder '{year_month}' (ID: {month_id}). Looking for day folder '{day_folder}'...")
+            date_id_path1 = _get_folder_id(drive_service, month_id, day_folder, drive_id)
+            if date_id_path1:
+                print(f"DEBUG find_drive_file: Path 1: Found date folder '{day_folder}' (ID: {date_id_path1}). Searching for PDF...")
+                pdf_info = _search_pdf_in_date_folder(drive_service, date_id_path1, route_str_upper, drive_id)
+                if pdf_info:
+                    print("INFO find_drive_file: PDF found via Path 1.")
+                    # If found via Path 1, we can return immediately
+                    return pdf_info
+                else:
+                    print(f"INFO find_drive_file: Path 1: PDF not found in '{day_folder}', although day folder exists.")
+            else:
+                print(f"DEBUG find_drive_file: Path 1: Date folder '{day_folder}' not found inside month folder '{year_month}'.")
+        else:
+            print(f"DEBUG find_drive_file: Path 1: Month folder '{year_month}' not found inside depot '{depot_name_in_drive}'.")
+
+        # --- Attempt Path 2: Depot -> YYYY-MM-DD ---
+        # Only proceed if pdf_info is still None (meaning Path 1 didn't find the file)
+        if pdf_info is None:
+            print(f"DEBUG find_drive_file: === Trying Path 2 (Depot -> {day_folder}) ===")
+            date_id_path2 = _get_folder_id(drive_service, depot_id, day_folder, drive_id)
+            if date_id_path2:
+                print(f"DEBUG find_drive_file: Path 2: Found date folder '{day_folder}' (ID: {date_id_path2}). Searching for PDF...")
+                pdf_info = _search_pdf_in_date_folder(drive_service, date_id_path2, route_str_upper, drive_id)
+                if pdf_info:
+                    print("INFO find_drive_file: PDF found via Path 2.")
+                    # pdf_info now holds the result from Path 2
+                else:
+                    print(f"INFO find_drive_file: Path 2: PDF not found in '{day_folder}', although day folder exists.")
+            else:
+                print(f"DEBUG find_drive_file: Path 2: Date folder '{day_folder}' not found directly under depot '{depot_name_in_drive}'.")
+        else:
+             # This case should technically not be reached if Path 1 returned early, but good for clarity
+             print(f"DEBUG find_drive_file: Skipping Path 2 because PDF was already found via Path 1.")
+
+
+        # --- Final Result ---
+        if pdf_info:
+            print(f"--- find_drive_file finished: Found file '{pdf_info.get('name', 'N/A')}' ---")
+            return pdf_info
+        else:
+            print(f"--- find_drive_file finished: File not found for route '{route_str_upper}' on date {date_str_ymd} via any path. ---")
+            return None
+
+    except Exception as e:
+        # Catch-all for unexpected errors during the search process
+        print(f"ERROR find_drive_file: Unexpected error during search logic: {e}")
+        traceback.print_exc() # Print detailed traceback for debugging
+        return None # Return None on unexpected error
+# --- End find_drive_file ---
 # --- End find_drive_file ---

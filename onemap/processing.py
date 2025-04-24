@@ -100,6 +100,8 @@ def format_stops(locations_df, period_prefix):
     student_id_col = f"{period_prefix}Student IDs"
     school_name_col = f"{period_prefix}School Names"
     sess_beg_col = f"{period_prefix}Sess_Beg." # Added Session Begin Time column
+    
+    
 
     # Check if essential source columns exist in the DataFrame
     # Note: These columns contain dictionaries themselves.
@@ -114,6 +116,7 @@ def format_stops(locations_df, period_prefix):
         # Process Student Stops
         student_stops_dict = route_data.get(student_col)
         student_ids_dict = route_data.get(student_id_col, {}) or {} # Handle potential None
+        
 
         if isinstance(student_stops_dict, dict):
             for seq_key, coords in student_stops_dict.items():
@@ -146,6 +149,7 @@ def format_stops(locations_df, period_prefix):
         school_stops_dict = route_data.get(school_col)
         school_names_dict = route_data.get(school_name_col, {}) or {} # Handle potential None
         school_times_dict = route_data.get(sess_beg_col, {}) or {} # Handle potential None
+        print(f"DEBUG format_stops ({period_prefix}): Received school_stops_dict: {school_stops_dict}")
 
         if isinstance(school_stops_dict, dict):
             for seq_key, coords in school_stops_dict.items():
