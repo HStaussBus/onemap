@@ -46,8 +46,8 @@ body {
 }
 
 .app-header h1 {
-    font-size: 1.75em;
-    color: #343a40; /* Dark heading color */
+    font-size: 3.5em;
+    color: #002447; /* Dark heading color */
     margin: 0; /* Remove default margin */
 }
 
@@ -192,8 +192,8 @@ button:hover {
 }
 
 #sidebar-content h2 {
-    font-size: 1.2em;
-    color: #343a40;
+    font-size: 1.7em;
+    color: #002447;
     margin-top: 0;
     margin-bottom: 15px;
     border-bottom: 1px solid #eee;
@@ -211,7 +211,7 @@ button:hover {
 }
 #sidebar-content strong {
     font-weight: 600;
-    color: #495057;
+    color: #002447;
 }
 
 .sidebar-links {
