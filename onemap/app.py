@@ -485,65 +485,6 @@ def get_map_data():
             "driver_name": "N/A", "driver_phone": "N/A"
              }), 500
 
-@app.route('/get_safety_data', methods=['POST'])
-def get_safety_data():
-    print("\n--- Received /get_safety_data request ---")
-    if not geotab_client:
-        print("ERROR /get_safety_data: Geotab client not ready.")
-        return jsonify({"error": "Geotab client not available"}), 503
-
-    data = request.get_json()
-    if not data: return jsonify({"error": "Invalid request"}), 400
-
-    device_id = data.get('device_id')
-    date_str = data.get('date') # Expects YYYY-MM-DD
-
-    if not device_id or not date_str:
-        print(f"ERROR /get_safety_data: Missing device_id ('{device_id}') or date ('{date_str}')")
-        return jsonify({"error": "Missing device_id or date"}), 400
-
-    try:
-        # Note: Using date_str directly for from/to assumes full day in UTC. Adjust if needed.
-        from_date_str = date_str
-        to_date_str = date_str
-
-        # --- Get Speeding Data ---
-        speeding_ex_df = processing.get_speeding_exceptions(geotab_client, device_id, from_date_str, to_date_str)
-        speeding_locations_df = processing.get_speeding_locations(geotab_client, speeding_ex_df)
-
-        # Convert speeding locations to JSON list
-        speeding_points = []
-        if not speeding_locations_df.empty:
-             # Select and format columns for frontend
-             speeding_locations_df_serializable = speeding_locations_df[['lat', 'lon', 'max_speed_mph', 'timestamp', 'event_duration']].copy()
-             # Ensure NAs are handled for JSON
-             speeding_locations_df_serializable.fillna('N/A', inplace=True)
-             speeding_points = speeding_locations_df_serializable.to_dict(orient='records')
-
-        # --- Get Idling Data ---
-        idling_ex_df = processing.get_idling_exceptions(geotab_client, device_id, from_date_str, to_date_str) # Default min 5 mins (300s)
-
-        # Convert idling locations to JSON list
-        idling_points = []
-        if not idling_ex_df.empty:
-            # Select and format columns for frontend
-            idling_ex_df_serializable = idling_ex_df[['Latitude', 'Longitude', 'Duration']].copy()
-            # Rename for consistency
-            idling_ex_df_serializable.rename(columns={'Latitude': 'lat', 'Longitude': 'lon', 'Duration':'event_duration'}, inplace=True)
-             # Ensure NAs are handled for JSON
-            idling_ex_df_serializable.fillna('N/A', inplace=True)
-            idling_points = idling_ex_df_serializable.to_dict(orient='records')
-
-        print(f"INFO /get_safety_data: Returning {len(speeding_points)} speeding points and {len(idling_points)} idling points.")
-        return jsonify({
-            "speeding_points": speeding_points,
-            "idling_points": idling_points
-        })
-
-    except Exception as e:
-        print(f"ERROR: Unhandled exception in /get_safety_data: {e}")
-        traceback.print_exc()
-        return jsonify({"error": f"An unexpected server error occurred: {e}"}), 500
 
 if __name__ == '__main__':
     if not gspread_client: print("FATAL: GSpread client failed initialization. Cannot run.")
