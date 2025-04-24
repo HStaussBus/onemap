@@ -188,7 +188,7 @@ button:hover {
     height: fit-content; /* Adjust height based on content */
     max-height: 600px; /* Optional: prevent excessive height */
     overflow-y: auto; /* Add scroll if content overflows */
-    margin-top: 60px; /* Space above sidebar */
+    margin-top: 65px; /* Space above sidebar */
 }
 
 #sidebar-content h2 {
@@ -269,7 +269,7 @@ button:hover {
 
 #download-opt-btn { /* Style download button if needed */
      margin-bottom: 15px;
-     background-color: #28a745; /* Green for download/success action */
+     background-color: #002447; /* Green for download/success action */
 }
 #download-opt-btn:hover {
      background-color: #218838; /* Darker green */
