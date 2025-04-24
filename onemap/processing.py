@@ -3,32 +3,7 @@ import pandas as pd
 # from shapely.geometry import LineString # No longer needed for frontend structure
 import config # For DEPOT_LOCS
 import traceback # For detailed error logging
-
-# def convert_to_polyline(df):
-#     """Converts DataFrame points to a Shapely LineString."""
-#     # (Keep original implementation if needed elsewhere, but not for this frontend refactor)
-#     if not isinstance(df, pd.DataFrame) or df.empty:
-#         return None
-#     if 'latitude' not in df.columns or 'longitude' not in df.columns:
-#         print("ERROR: DataFrame missing 'latitude' or 'longitude' columns for polyline.")
-#         return None
-#     if len(df) < 2:
-#         return None
-#     try:
-#         # Filter out rows with non-numeric or missing coordinates BEFORE creating points
-#         df_numeric = df.dropna(subset=['latitude', 'longitude'])
-#         df_numeric['latitude'] = pd.to_numeric(df_numeric['latitude'], errors='coerce')
-#         df_numeric['longitude'] = pd.to_numeric(df_numeric['longitude'], errors='coerce')
-#         df_numeric.dropna(subset=['latitude', 'longitude'], inplace=True)
-#         if len(df_numeric) < 2: return None # Check again after cleaning
-
-#         # Create list of coordinate tuples (lon, lat for Shapely)
-#         points = list(zip(df_numeric['longitude'], df_numeric['latitude']))
-#         polyline = LineString(points)
-#         return polyline
-#     except Exception as e:
-#         print(f"ERROR: Failed to create polyline: {e}")
-#         return None
+import datetime
 
 # --- NEW Function: Format GPS Trace ---
 def format_gps_trace(df):
@@ -133,12 +108,21 @@ def format_stops(locations_df, period_prefix):
                     # Further check if lat/lon are valid numbers (optional but good)
                     if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) and pd.notna(lat) and pd.notna(lon):
                         pupil_id = student_ids_dict.get(seq_key, 'N/A') # Use original key for ID lookup
+                        pupil_id_display = pupil_id
+                        if pupil_id != 'N/A' and pupil_id is not None:
+                            try:
+                                # Convert to float first to handle potential decimals ("12345.0")
+                                # Then convert to int to truncate the decimal part
+                                pupil_id_int = int(float(pupil_id))
+                                pupil_id_display = pupil_id_int # Use the integer if conversion worked
+                            except (ValueError, TypeError):
+                                pass # Keep original display value
                         stops_list.append({
                             "lat": lat,
                             "lon": lon,
                             "type": "student",
                             "sequence": seq, # Store numeric sequence
-                            "info": f"Pickup #: {seq}<br>Pupil ID: {pupil_id}" # Example popup info
+                            "info": f"Pickup #: {seq}<br>Pupil ID: {pupil_id_display}" # Example popup info
                         })
                     # else: print(f"WARN format_stops ({period_prefix}): Invalid coordinate values for student seq {seq}: {coords}") # Optional debug
                 # else: print(f"WARN format_stops ({period_prefix}): Invalid coordinate structure for student seq {seq}: {coords}") # Optional debug
@@ -165,26 +149,47 @@ def format_stops(locations_df, period_prefix):
                     lat, lon = coords
                     if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) and pd.notna(lat) and pd.notna(lon):
                         school_name = school_names_dict.get(seq_key, 'N/A') # Use original key for lookups
-                        sess_beg_time = school_times_dict.get(seq_key)
-                        # Format time nicely if possible (assuming it might be datetime object or string)
-                        time_str = "N/A"
-                        if pd.notna(sess_beg_time):
-                             try:
-                                 # Attempt conversion if it's not already a formatted string
-                                 time_dt = pd.to_datetime(sess_beg_time, errors='coerce')
-                                 if pd.notna(time_dt):
-                                     time_str = time_dt.strftime("%I:%M %p") # HH:MM AM/PM
-                                 else:
-                                     time_str = str(sess_beg_time) # Use original string if conversion fails
-                             except Exception:
-                                 time_str = str(sess_beg_time) # Fallback
+                        sess_beg_time = school_times_dict.get(seq_key) # Get the time value
+                        time_str = "N/A" # Default
 
+                        if pd.notna(sess_beg_time):
+                            formatted_time = None
+                            try:
+                                # Check if it's already a datetime.time object (from process_optdump)
+                                if isinstance(sess_beg_time, datetime.time):
+                                    # Format directly using strftime for time objects
+                                    # %I is 12-hour, %M is minute, %p is AM/PM
+                                    formatted_time = sess_beg_time.strftime("%I:%M %p")
+                                else:
+                                    # If not a time object, try converting using pandas
+                                    time_dt = pd.to_datetime(sess_beg_time, errors='coerce')
+                                    if pd.notna(time_dt):
+                                        formatted_time = time_dt.strftime("%I:%M %p")
+                                    else:
+                                        # If conversion fails, use original string representation
+                                        time_str = str(sess_beg_time)
+
+                                # If formatting succeeded, remove leading zero from hour if present
+                                if formatted_time:
+                                    if formatted_time.startswith('0'):
+                                         time_str = formatted_time[1:] # Remove leading zero
+                                    else:
+                                         time_str = formatted_time
+
+                            except Exception as fmt_err:
+                                # Fallback to string representation on any formatting error
+                                print(f"WARN format_stops ({period_prefix}): Could not format time '{sess_beg_time}': {fmt_err}")
+                                time_str = str(sess_beg_time)
+
+                        # Now time_str holds the desired format "8:00 AM" or similar
+
+                        # The rest of the append logic...
                         stops_list.append({
                             "lat": lat,
                             "lon": lon,
                             "type": "school",
                             "sequence": seq, # Use determined sequence
-                            "info": f"School: {school_name}<br>Session Begin: {time_str}" # Example popup info
+                            "info": f"School: {school_name}<br>Session Begin: {time_str}" # Use the formatted time_str
                         })
                     # else: print(f"WARN format_stops ({period_prefix}): Invalid coordinate values for school seq {seq}: {coords}") # Optional debug
                 # else: print(f"WARN format_stops ({period_prefix}): Invalid coordinate structure for school seq {seq}: {coords}") # Optional debug
@@ -377,20 +382,25 @@ def process_optdump(optdump, session_type, routes_to_buses):
         # Process School Stops (Sequence == 0)
         school_cols_exist = all(c in df.columns for c in ['Route', 'Sequence', 'Latitude', 'Longitude'])
         if school_cols_exist:
-            school_stops = df[df["Sequence"] == 0].sort_values(by=["Route", "Sess_Beg."]) # Sort schools by session time
-            for _, row in school_stops.iterrows():
+            school_stops = df[df["Sequence"] == 0].sort_values(by=["Route", "Sess_Beg."])
+            # Use row.name (the DataFrame index) as a unique key for each school stop
+            for unique_school_key, row in school_stops.iterrows(): # Use index as unique_school_key
                 route = row["Route"]
-                seq = 0 # School stops are identified by Sequence == 0
+                # seq = 0 # No longer need this hardcoded value for the key
                 lat = row["Latitude"]
                 lon = row["Longitude"]
-                school_coords_dict.setdefault(route, {})[seq] = (lat, lon)
-                # Safely get School Name and Time if columns exist
+                # Use unique_school_key for the dictionary
+                school_coords_dict.setdefault(route, {})[unique_school_key] = (lat, lon)
                 if 'School_Code_&_Name' in row:
                     cleaned_school_name = str(row["School_Code_&_Name"]).replace("ARRIVE", "").strip()
-                    school_names_dict.setdefault(route, {})[seq] = cleaned_school_name
+                    # Use unique_school_key for the dictionary
+                    school_names_dict.setdefault(route, {})[unique_school_key] = cleaned_school_name
                 if 'Sess_Beg.' in row and pd.notna(row['Sess_Beg.']):
-                     school_times_dict.setdefault(route, {})[seq] = row["Sess_Beg."]
-        else: print(f"WARN process_optdump ({session_type}): Missing columns needed to process school stops.")
+                     # Use unique_school_key for the dictionary
+                     school_times_dict.setdefault(route, {})[unique_school_key] = row["Sess_Beg."]
+        else:
+            print(f"WARN process_optdump ({session_type}): Missing columns needed to process school stops.")
+
 
     else:
         print(f"WARN process_optdump ({session_type}): Cannot process stops by sequence due to missing/invalid 'Sequence' column.")
