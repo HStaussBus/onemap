@@ -412,4 +412,90 @@ def find_drive_file(drive_service, root_folder_id, depot, date_str_ymd, route, d
         traceback.print_exc() # Print detailed traceback for debugging
         return None # Return None on unexpected error
 # --- End find_drive_file ---
-# --- End find_drive_file ---
+IDLING_RULE_ID = "RuleIdlingId"
+SPEEDING_RULE_ID = "RulePostedSpeedingId"
+
+def fetch_safety_exceptions(api, device_id, start_time_utc, end_time_utc):
+    """
+    Fetches Idling and Speeding exceptions for a specific device and time range.
+    Does NOT fetch coordinates.
+
+    Args:
+        api: Authenticated Geotab API client object.
+        device_id (str): The specific Geotab device ID (e.g., "b179").
+        start_time_utc (str): The start timestamp in ISO 8601 UTC format.
+        end_time_utc (str): The end timestamp in ISO 8601 UTC format.
+
+    Returns:
+        list: A list of dictionaries, each representing a safety event details.
+              Example dict:
+              {'device_id': 'bXXX', 'rule_name': 'Idling', 'rule_id': 'RuleIdlingId',
+               'start_time': '...', 'end_time': '...', 'duration_s': 120.0}
+    """
+
+    all_exceptions_raw = [] # Initialize list for raw API results
+
+    # --- Fetch Exceptions (using ExceptionEventSearch structure) ---
+    rule_ids_to_fetch = {
+        "Idling": IDLING_RULE_ID,
+        "Speeding": SPEEDING_RULE_ID
+    }
+
+    for rule_name_friendly, rule_id_actual in rule_ids_to_fetch.items():
+        print(f"\nFetching {rule_name_friendly} exceptions using ExceptionEventSearch...")
+        try:
+            device_search = {'id': device_id}
+            rule_search = {'id': rule_id_actual}
+            exception_search = {
+                'deviceSearch': device_search,
+                'ruleSearch': rule_search,
+                'fromDate': start_time_utc,
+                'toDate': end_time_utc
+            }
+            results = api.get('ExceptionEvent', search=exception_search)
+            print(f"-> Found {len(results)} {rule_name_friendly} results.")
+            # Add results for processing
+            all_exceptions_raw.extend(results)
+
+        except Exception as e:
+            print(f"ERROR fetching {rule_name_friendly} exceptions: {e}")
+
+    # --- Process combined results (NO coordinate fetching here) ---
+    print(f"\nProcessing {len(all_exceptions_raw)} combined raw exceptions...")
+    processed_data = []
+    if all_exceptions_raw:
+        for exception in all_exceptions_raw:
+            device_info = exception.get('device', {})
+            rule_info = exception.get('rule', {})
+            duration_obj = exception.get('duration')
+            event_start_str = exception.get('activeFrom')
+            event_end_str = exception.get('activeTo')
+
+            actual_device_id = device_info.get('id') if isinstance(device_info, dict) else None
+            actual_rule_id = rule_info.get('id') if isinstance(rule_info, dict) else None
+
+            if not actual_device_id or not actual_rule_id or not event_start_str:
+                continue # Skip if essential info missing
+
+            # --- Parse duration ---
+            duration_seconds = None
+            if isinstance(duration_obj, dict) and 'ticks' in duration_obj:
+                try:
+                    duration_seconds = duration_obj['ticks'] / 10_000_000
+                except Exception:
+                    duration_seconds = None # Keep as None if parsing fails
+
+            processed_data.append({
+                'device_id': actual_device_id,
+                'rule_name': rule_info.get('name') or actual_rule_id, # Use name or fallback to ID
+                'rule_id': actual_rule_id,
+                'start_time': event_start_str, # Keep as ISO string
+                'end_time': event_end_str,     # Keep as ISO string
+                'duration_s': duration_seconds
+                # No latitude/longitude here
+            })
+    else:
+        print("No raw exceptions were successfully retrieved.")
+
+    print(f"Finished processing. Returning {len(processed_data)} safety event details.")
+    return processed_data # Return list of dicts

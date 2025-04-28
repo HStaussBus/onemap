@@ -4,60 +4,122 @@ import pandas as pd
 import config # For DEPOT_LOCS
 import traceback # For detailed error logging
 import datetime
+import pytz
 
 # --- NEW Function: Format GPS Trace ---
-def format_gps_trace(df):
+def parse_timestamp(ts_input, input_key_name):
+    dt = None
+    if ts_input is None: return None
+    if isinstance(ts_input, datetime.datetime): dt = ts_input
+    elif isinstance(ts_input, str):
+        if not ts_input.strip(): return None
+        try:
+            temp_ts_input = ts_input
+            if temp_ts_input.endswith('Z'): temp_ts_input = temp_ts_input[:-1] + '+00:00'
+            if '.' in temp_ts_input:
+                parts = temp_ts_input.split('.')
+                if len(parts) == 2:
+                    tz_part = ""; microsecond_part = parts[1]
+                    if '+' in microsecond_part: tz_split = microsecond_part.split('+'); microsecond_part = tz_split[0]; tz_part = '+' + tz_split[1]
+                    elif '-' in microsecond_part:
+                        last_dash_idx = microsecond_part.rfind('-')
+                        if last_dash_idx > 0:
+                            tz_split = [microsecond_part[:last_dash_idx], microsecond_part[last_dash_idx+1:]]
+                            if len(tz_split[1]) >= 4 and tz_split[1].replace(':','').isdigit():
+                                 frac_part = tz_split[0]; tz_part = '-' + tz_split[1]
+                            else: frac_part = microsecond_part
+                    else: frac_part = microsecond_part
+                    if len(frac_part) > 6: frac_part = frac_part[:6]
+                    temp_ts_input = parts[0] + '.' + frac_part + tz_part
+            dt = datetime.datetime.fromisoformat(temp_ts_input)
+        except (ValueError, TypeError) as iso_err:
+            dt = pd.to_datetime(ts_input, errors='coerce', utc=True)
+            if isinstance(dt, pd.Timestamp): dt = dt.to_pydatetime()
+    elif isinstance(ts_input, pd.Timestamp): dt = ts_input.to_pydatetime()
+    else:
+        dt = pd.to_datetime(ts_input, errors='coerce', utc=True)
+        if isinstance(dt, pd.Timestamp): dt = dt.to_pydatetime()
+
+    if dt is None or pd.isna(dt): return None
+    if dt.tzinfo is None: dt = pytz.utc.localize(dt)
+    elif str(dt.tzinfo) != 'UTC': dt = dt.astimezone(pytz.utc)
+    return dt
+# --- End Timestamp Parsing Function ---
+
+
+# *** CORRECTED format_gps_trace function ***
+def format_gps_trace(vehicle_data_df):
     """
-    Converts DataFrame lat/lon/dateTime/speed columns into a list of dictionaries
-    suitable for detailed Leaflet plotting (including hover tooltips).
-    Returns: [{'lat': float, 'lon': float, 'ts': iso_timestamp_str, 'spd': float_kph}, ...]
+    Converts a DataFrame of vehicle GPS data into a list of GeoJSON Point features,
+    ensuring each feature has a 'dateTime' property in ISO format.
+
+    Args:
+        vehicle_data_df (pd.DataFrame): DataFrame containing GPS data from Geotab.
+                                         Expected columns: 'latitude', 'longitude',
+                                         'dateTime', 'speed'.
+
+    Returns:
+        list: A list of GeoJSON Point features representing the GPS trace.
+              Returns an empty list if the input is invalid or empty.
     """
-    trace_data = []
-    if not isinstance(df, pd.DataFrame) or df.empty:
-        return trace_data # Return empty list
+    trace_features = []
+    if vehicle_data_df is None or vehicle_data_df.empty:
+        print("WARN format_gps_trace: Input DataFrame is None or empty.")
+        return trace_features
 
-    required_cols = ['latitude', 'longitude', 'dateTime', 'speed']
-    if not all(col in df.columns for col in required_cols):
-        missing = [col for col in required_cols if col not in df.columns]
-        print(f"ERROR format_gps_trace: DataFrame missing required columns: {missing}.")
-        # Decide if you want to return partial data or empty
-        # Returning empty is safer if all columns are needed for hover
-        return trace_data
+    required_cols = ['latitude', 'longitude', 'dateTime'] # Speed is optional but nice
+    missing_cols = [col for col in required_cols if col not in vehicle_data_df.columns]
+    if 'dateTime' in missing_cols:
+         print("ERROR format_gps_trace: Crucial 'dateTime' column is missing. Cannot format trace.")
+         return trace_features # Cannot proceed without timestamps
+    elif missing_cols:
+         print(f"WARN format_gps_trace: Missing optional columns: {missing_cols}.")
 
-    try:
-        # Select columns, work on a copy
-        df_coords = df[required_cols].copy()
 
-        # Convert coordinates and speed to numeric, dropping invalid rows
-        df_coords['latitude'] = pd.to_numeric(df_coords['latitude'], errors='coerce')
-        df_coords['longitude'] = pd.to_numeric(df_coords['longitude'], errors='coerce')
-        df_coords['speed'] = pd.to_numeric(df_coords['speed'], errors='coerce')
-        df_coords.dropna(subset=['latitude', 'longitude', 'speed'], inplace=True) # Speed also required
+    print(f"DEBUG format_gps_trace: Formatting {len(vehicle_data_df)} GPS points into GeoJSON...")
 
-        # Ensure dateTime is timezone-aware UTC datetime object
-        df_coords['dateTime'] = pd.to_datetime(df_coords['dateTime'], errors='coerce', utc=True)
-        df_coords.dropna(subset=['dateTime'], inplace=True)
+    for index, row in vehicle_data_df.iterrows():
+        try:
+            lat = float(row['latitude'])
+            lon = float(row['longitude'])
+            speed = row.get('speed', 0) # Use .get for optional speed column
+            timestamp_input = row['dateTime'] # Get the timestamp input
 
-        if df_coords.empty:
-             print("WARN format_gps_trace: No valid rows remaining after data cleaning.")
-             return trace_data
+            # Parse and validate the timestamp using the helper function
+            timestamp_dt = parse_timestamp(timestamp_input, f"format_gps_trace row[{index}]")
 
-        # Convert to list of dictionaries
-        for _, row in df_coords.iterrows():
-             trace_data.append({
-                 'lat': row['latitude'],
-                 'lon': row['longitude'],
-                 # Convert datetime to ISO 8601 string (UTC) for JSON compatibility
-                 'ts': row['dateTime'].isoformat(),
-                 'spd': row['speed'] # Speed in kph from Geotab
-             })
+            if timestamp_dt is None:
+                 print(f"WARN format_gps_trace: Skipping row {index} due to invalid/unparseable timestamp: '{timestamp_input}'")
+                 continue
 
-        # print(f"DEBUG format_gps_trace: Formatted {len(trace_data)} trace points with details.") # Optional debug
-        return trace_data
-    except Exception as e:
-        print(f"ERROR format_gps_trace: Failed during detailed coordinate formatting: {e}")
-        print(traceback.format_exc())
-        return [] # Return empty list on error
+            # *** FIX: Ensure dateTime is added to properties as ISO string ***
+            feature = {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [lon, lat] # GeoJSON format: [longitude, latitude]
+                },
+                "properties": {
+                    "dateTime": timestamp_dt.isoformat(), # Store as ISO string
+                    "speed": speed
+                    # Add any other relevant properties from the row here if needed
+                    # "original_ts": str(timestamp_input) # Optional: keep original for debug
+                }
+            }
+            trace_features.append(feature)
+
+        except (ValueError, TypeError, KeyError) as e:
+            # Catch errors during row processing (e.g., non-numeric lat/lon)
+            print(f"WARN format_gps_trace: Skipping row {index} due to error: {e} - Data: {row.to_dict()}")
+            continue
+        except Exception as e:
+             # Catch any other unexpected error during row processing
+            print(f"ERROR format_gps_trace: Unexpected error processing row {index}: {e} - Data: {row.to_dict()}")
+            continue
+
+
+    print(f"DEBUG format_gps_trace: Successfully formatted {len(trace_features)} points into GeoJSON.")
+    return trace_features
 # --- NEW Function: Format Stops ---
 def format_stops(locations_df, period_prefix):
     """
@@ -485,9 +547,233 @@ def process_am_pm(optdump, am_routes_to_buses, pm_routes_to_buses):
     if pm_locations_df is None: pm_locations_df = pd.DataFrame()
 
     return am_locations_df, pm_locations_df
+def annotate_log_records_with_exceptions(log_records_geojson, raw_exceptions):
+    """
+    Annotates a list of log record GeoJSON features based on whether their timestamp
+    falls within the time range of any provided exception event.
+    Uses specific keys 'rule_name', 'start_time', 'end_time'. Includes enhanced debugging.
+
+    Args:
+        log_records_geojson (list): A list of GeoJSON Point features, where each feature's
+                                     properties contain at least a 'dateTime' field in
+                                     ISO format string (e.g., 'YYYY-MM-DDTHH:MM:SSZ' or similar).
+        raw_exceptions (list): A list of dictionaries representing exception events.
+                               Expected keys: 'rule_name', 'start_time', 'end_time'.
+
+    Returns:
+        list: The input list of log_records_geojson features, annotated.
+    """
+    print(f"Starting annotation: {len(log_records_geojson)} logs, {len(raw_exceptions)} exceptions.")
+    if not log_records_geojson:
+        print("Annotation skipped: No log records provided.")
+        return []
+    if not raw_exceptions:
+        print("Annotation skipped: No exceptions provided. Adding default annotations to logs.")
+        for feature in log_records_geojson:
+            if 'properties' not in feature: feature['properties'] = {}
+            feature['properties']['exception_type'] = '--'
+            feature['properties']['exception_details'] = '--'
+        return log_records_geojson
+
+    processed_exceptions = []
+    # --- Pre-process Exceptions ---
+    print("Processing raw exception data...")
+    rule_key = 'rule_name'
+    start_key = 'start_time'
+    end_key = 'end_time'
+    duration_key = 'duration_s'
+
+    # --- Robust Timestamp Parsing Function ---
+    # (Keep the parse_timestamp function from the previous version - it seems okay)
+    def parse_timestamp(ts_input, input_key_name):
+        dt = None
+        if ts_input is None: return None
+        if isinstance(ts_input, datetime.datetime): dt = ts_input
+        elif isinstance(ts_input, str):
+            if not ts_input.strip(): return None
+            try:
+                temp_ts_input = ts_input
+                if temp_ts_input.endswith('Z'): temp_ts_input = temp_ts_input[:-1] + '+00:00'
+                if '.' in temp_ts_input:
+                    parts = temp_ts_input.split('.')
+                    if len(parts) == 2:
+                        tz_part = ""; microsecond_part = parts[1]
+                        if '+' in microsecond_part: tz_split = microsecond_part.split('+'); microsecond_part = tz_split[0]; tz_part = '+' + tz_split[1]
+                        elif '-' in microsecond_part:
+                            last_dash_idx = microsecond_part.rfind('-')
+                            if last_dash_idx > 0:
+                                tz_split = [microsecond_part[:last_dash_idx], microsecond_part[last_dash_idx+1:]]
+                                if len(tz_split[1]) >= 4 and tz_split[1].replace(':','').isdigit():
+                                     frac_part = tz_split[0]; tz_part = '-' + tz_split[1]
+                                else: frac_part = microsecond_part # No valid timezone found
+                        else: frac_part = microsecond_part # No +/- found
+                        if len(frac_part) > 6: frac_part = frac_part[:6]
+                        temp_ts_input = parts[0] + '.' + frac_part + tz_part
+                dt = datetime.datetime.fromisoformat(temp_ts_input)
+            except (ValueError, TypeError) as iso_err:
+                dt = pd.to_datetime(ts_input, errors='coerce', utc=True)
+                if isinstance(dt, pd.Timestamp): dt = dt.to_pydatetime()
+        elif isinstance(ts_input, pd.Timestamp): dt = ts_input.to_pydatetime()
+        else:
+            dt = pd.to_datetime(ts_input, errors='coerce', utc=True)
+            if isinstance(dt, pd.Timestamp): dt = dt.to_pydatetime()
+
+        if dt is None or pd.isna(dt): return None
+        if dt.tzinfo is None: dt = pytz.utc.localize(dt)
+        elif str(dt.tzinfo) != 'UTC': dt = dt.astimezone(pytz.utc)
+        return dt
+    # --- End Timestamp Parsing Function ---
+
+    for i, exc in enumerate(raw_exceptions):
+        if not isinstance(exc, dict):
+            print(f"WARN: Exception item at index {i} is not a dictionary (type: {type(exc)}). Skipping.")
+            continue
+        try:
+            rule_name = exc.get(rule_key, 'Unknown Exception')
+            start_str_or_dt = exc.get(start_key)
+            end_str_or_dt = exc.get(end_key)
+            if start_str_or_dt is None or end_str_or_dt is None:
+                print(f"WARN: Exception at index {i} missing '{start_key}' ('{start_str_or_dt}') or '{end_key}' ('{end_str_or_dt}'). Skipping.")
+                continue
+            start_dt = parse_timestamp(start_str_or_dt, f"Exc[{i}].{start_key}")
+            end_dt = parse_timestamp(end_str_or_dt, f"Exc[{i}].{end_key}")
+            if start_dt is None or end_dt is None:
+                 print(f"WARN: Failed to parse valid UTC datetime for Start ('{start_str_or_dt}') or End ('{end_str_or_dt}') time for exception at index {i}. Skipping.")
+                 continue
+            if start_dt > end_dt:
+                print(f"WARN: Exception {i} start time {start_dt} is after end time {end_dt}. Swapping.")
+                start_dt, end_dt = end_dt, start_dt
+            duration_val = exc.get(duration_key)
+            duration_sec = None
+            try:
+                 if duration_val is not None and isinstance(duration_val, (int, float)) and not pd.isna(duration_val): duration_sec = float(duration_val)
+                 else: duration_sec = (end_dt - start_dt).total_seconds()
+            except (ValueError, TypeError): duration_sec = (end_dt - start_dt).total_seconds()
+            details = ( f"Type: {rule_name}<br>" f"Duration: {duration_sec:.1f} sec" )
+            processed_exceptions.append({ 'start': start_dt, 'end': end_dt, 'type': rule_name, 'details': details })
+        except Exception as e:
+            print(f"WARN: Unexpected error processing exception at index {i}: {e} - Data: {exc}")
+            continue
+
+    if not processed_exceptions:
+         print("WARN: No valid exceptions processed after parsing. Adding default annotations to logs.")
+         for feature in log_records_geojson:
+             if 'properties' not in feature: feature['properties'] = {}
+             feature['properties']['exception_type'] = '--'; feature['properties']['exception_details'] = '--'
+         return log_records_geojson
+
+    print(f"Processed {len(processed_exceptions)} valid exceptions. Annotating log records...")
+    # --- Annotate Log Records ---
+    match_count = 0
+    print_debug_limit = 10 # Limit debug prints to avoid flooding
+
+    # +++ DEBUG: Check if execution reaches before the main loop +++
+    print("DEBUG: >>> Entering main annotation loop...")
+    # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+    for feature_index, feature in enumerate(log_records_geojson):
+        # +++ DEBUG: Check if the loop iterates +++
+        if feature_index < print_debug_limit: # Print only for the first few iterations
+             print(f"DEBUG: --- Processing Log Index {feature_index} ---")
+        # ++++++++++++++++++++++++++++++++++++++++
+
+        if 'properties' not in feature: feature['properties'] = {}
+        feature['properties']['exception_type'] = '--'
+        feature['properties']['exception_details'] = '--'
+        log_dt = None # Initialize log_dt to None for this iteration
+        try:
+            log_dt_str = feature['properties'].get('dateTime')
+            # +++ DEBUG: Check if dateTime property exists +++
+            if feature_index < print_debug_limit:
+                 print(f"DEBUG: Log[{feature_index}] Raw dateTime property: '{log_dt_str}' (Type: {type(log_dt_str)})")
+            # ++++++++++++++++++++++++++++++++++++++++++++++++
+            if not log_dt_str:
+                 if feature_index < print_debug_limit: print(f"DEBUG: Log[{feature_index}] missing dateTime property. Skipping.")
+                 continue
+
+            log_dt = parse_timestamp(log_dt_str, f"Log[{feature_index}]")
+
+            # +++ DEBUG: Check result of log_dt parsing +++
+            if feature_index < print_debug_limit:
+                 print(f"DEBUG: Log[{feature_index}] Parsed log_dt: {repr(log_dt)}")
+            # ++++++++++++++++++++++++++++++++++++++++++++++
+
+            if log_dt is None:
+                if feature_index < print_debug_limit: print(f"DEBUG: Log[{feature_index}] resulted in None after parsing. Skipping.")
+                continue # Skip if log time couldn't be parsed
+
+            # +++ DEBUG: Check if execution reaches before the inner exception loop +++
+            # if feature_index < print_debug_limit: print(f"DEBUG: Log[{feature_index}] Parsed successfully, entering exception check loop...")
+            # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+            matched_exception = None
+            for exc_index, exc in enumerate(processed_exceptions):
+                is_match = False
+                try:
+                    # +++ DEBUG: Check types and timezones right before comparison +++
+                    log_valid = isinstance(log_dt, datetime.datetime) and log_dt.tzinfo is not None
+                    exc_start_valid = isinstance(exc['start'], datetime.datetime) and exc['start'].tzinfo is not None
+                    exc_end_valid = isinstance(exc['end'], datetime.datetime) and exc['end'].tzinfo is not None
+
+                    if log_valid and exc_start_valid and exc_end_valid:
+                         # Perform the actual comparison
+                         is_match = (exc['start'] <= log_dt) and (log_dt <= exc['end'])
+
+                         # Print detailed comparison info (limited)
+                         should_print_debug = feature_index < print_debug_limit or exc_index < print_debug_limit # Print first few logs/exceptions
+                         if should_print_debug:
+                              print("-" * 10)
+                              print(f"DEBUG CMP Log[{feature_index}] vs Exc[{exc_index}] ('{exc['type']}')")
+                              print(f"  Log DT: {log_dt.isoformat()} | Type: {type(log_dt)} | Repr: {repr(log_dt)}")
+                              print(f"  Exc ST: {exc['start'].isoformat()} | Type: {type(exc['start'])} | Repr: {repr(exc['start'])}")
+                              print(f"  Exc ET: {exc['end'].isoformat()} | Type: {type(exc['end'])} | Repr: {repr(exc['end'])}")
+                              comp1_val = exc['start'] <= log_dt
+                              comp2_val = log_dt <= exc['end']
+                              print(f"  Comparison: (Start <= Log): {comp1_val} | (Log <= End): {comp2_val} | Overall Match: {is_match}")
+                              print("-" * 10)
+
+                    else:
+                         # This warning is critical if it appears
+                         if feature_index < print_debug_limit: # Limit printing warnings
+                             print(f"WARN CMP SKIP Log[{feature_index}]: Inconsistent types/tzinfo: log_valid={log_valid}, exc_start_valid={exc_start_valid}, exc_end_valid={exc_end_valid}")
+
+                except TypeError as cmp_err:
+                     # This error indicates incompatible types being compared
+                     print(f"ERROR Type Comparison Error Log[{feature_index}] vs Exc[{exc_index}]: {cmp_err}. Log={repr(log_dt)}, ExcStart={repr(exc['start'])}, ExcEnd={repr(exc['end'])}")
+                     continue # Skip this specific comparison
+
+                if is_match:
+                    # ... (prioritization logic remains the same) ...
+                    current_priority = -1; new_priority = 0; exc_type_lower = exc['type'].lower()
+                    if 'speeding' in exc_type_lower: new_priority = 2
+                    elif 'idling' in exc_type_lower or 'idle' in exc_type_lower: new_priority = 0
+                    else: new_priority = 1
+                    if matched_exception is not None:
+                        matched_type_lower = matched_exception['type'].lower()
+                        if 'speeding' in matched_type_lower: current_priority = 2
+                        elif 'idling' in matched_type_lower or 'idle' in matched_type_lower: current_priority = 0
+                        else: current_priority = 1
+                    else: current_priority = -1
+                    if new_priority > current_priority: matched_exception = exc
 
 
-# --- REMOVED prepare_route_data function ---
-# def prepare_route_data(route_row, period):
-#     """Convert AM/PM prefixed Series to expected input for plot_route_updated."""
-#     ... (Removed as formatting is now done differently) ...
+            # Annotate if a match was found
+            if matched_exception:
+                feature['properties']['exception_type'] = matched_exception['type']
+                feature['properties']['exception_details'] = matched_exception['details']
+                match_count += 1
+                # Optional print for confirmed matches
+                # if match_count < print_debug_limit:
+                #      print(f"  --> MATCH CONFIRMED! Log[{feature_index}] ({log_dt.isoformat()}) matched Exc Type: {matched_exception['type']}")
+
+        except Exception as e:
+            # Catch errors during the processing of a single log record's annotation attempt
+            print(f"WARN: Error processing log record during annotation loop (Index {feature_index}): {e}")
+            # Ensure properties are reset even if an error occurs mid-processing
+            feature['properties']['exception_type'] = '--'; feature['properties']['exception_details'] = '--'
+
+    # +++ DEBUG: Check if execution reaches after the main loop +++
+    print(f"DEBUG: <<< Exiting main annotation loop after processing {feature_index+1 if 'feature_index' in locals() else 0} logs. >>>")
+    # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    print(f"Annotation process finished. Annotated {match_count} log points based on exception ranges.")
+    return log_records_geojson

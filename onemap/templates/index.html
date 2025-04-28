@@ -5,11 +5,36 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OneMap by NYCSBUS</title>
 
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
           integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
           crossorigin=""/>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+    <style>
+        /* Add specific styles for safety controls if needed, or use existing */
+        .safety-toggles {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+        }
+        .safety-toggles button {
+             background-color: #6c757d; /* Greyish */
+             margin-right: 5px;
+             padding: 5px 10px; /* Smaller padding for toggles */
+             font-size: 0.9em;
+        }
+        .safety-toggles button.active {
+            background-color: #28a745; /* Green for active */
+            font-weight: bold;
+        }
+         .safety-toggles button:hover:not(.active) {
+             background-color: #5a6268;
+         }
+         .map-toggles .toggle-button.safety-active {
+             background-color: #fd7e14; /* Orange to indicate safety mode active */
+             border-color: #fd7e14;
+         }
+    </style>
 </head>
 <body>
     <div class="page-container">
@@ -39,10 +64,8 @@
                      <button id="showAmButton" class="toggle-button active">AM</button>
                      <button id="showPmButton" class="toggle-button">PM</button>
                      <button id="showSafetyButton" class="toggle-button">Safety Summary</button>
-                     </div>
-                <div id="mapContainer"
-                     style="height: 600px; width: 100%;"
-                     data-mapbox-token="{{ mapbox_token or '' }}">
+                </div>
+                <div id="mapContainer" style="height: 600px; width: 100%;">
                      </div>
             </div>
 
@@ -51,7 +74,6 @@
                     <h2 id="sidebar-title">Trip Details</h2>
                     <p><strong>Vehicle:</strong> <span id="sidebar-vehicle">--</span></p>
                     <p><strong>Route:</strong> <span id="sidebar-route">--</span></p>
-
                     <p><strong>Driver:</strong> <span id="sidebar-driver-name">--</span></p>
                     <p><strong>Phone:</strong> <span id="sidebar-driver-phone">--</span></p>
                     <hr style="margin: 15px 0;">
@@ -60,8 +82,14 @@
                     <div class="sidebar-links">
                          <a id="dviLink" href="#" style="opacity: 0.5;">View DVI</a>
                          <a id="optLink" href="#">Show OPT Information</a>
-                         </div>
+                    </div>
 
+                    <div id="safetyTogglesContainer" class="safety-toggles" style="display: none;">
+                        <p><strong>Safety View Period:</strong></p>
+                        <button id="safetyToggleAM" data-period="AM">AM</button>
+                        <button id="safetyTogglePM" data-period="PM">PM</button>
+                        <button id="safetyToggleRoundTrip" data-period="RoundTrip" class="active">Round Trip</button>
+                    </div>
                     <div id="loadingIndicator" style="display: none; padding: 15px 0; text-align: center; font-style: italic; color: #6c757d;">
                          Loading...
                     </div>
@@ -69,7 +97,7 @@
                          </div>
                 </div>
             </aside>
-            </div>
+        </div>
 
         <section id="optTableContainer" class="opt-table-section" style="display: none;">
              <h2>OPT Information</h2>
@@ -80,10 +108,11 @@
                  </div>
              </div>
         </section>
-        </div> <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
           crossorigin=""></script>
-
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 
 </body>
