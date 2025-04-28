@@ -27,19 +27,70 @@ function initializeMap() {
         console.log("DEBUG: Map initialization skipped (already initialized or container missing).");
         return;
     }
+
+    // --- Get Mapbox Token from HTML (Passed from Flask) ---
+    // Assumes index.html has an element like <div id="mapContainer" data-mapbox-token="{{ mapbox_token }}"></div>
+    mapboxAccessToken = mapContainer.dataset.mapboxToken;
+    if (!mapboxAccessToken) {
+        console.warn("DEBUG WARN: Mapbox Access Token not found in map container data attribute. Custom Mapbox styles may not work.");
+        // displayError("Map configuration error: Missing access token."); // Optional user message
+    } else {
+        console.log("DEBUG: Mapbox Access Token found.");
+    }
+    // ----------------------------------------------------
+
     try {
-        map = L.map(mapContainer).setView([40.7128, -74.0060], 11); // Default: NYC
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        // 1. Define Basemap Layers
+        const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
             maxZoom: 19,
-        }).addTo(map);
+        });
+
+        // Grayscale layer using CartoDB Positron
+        const grayscale = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 20
+        });
+
+        // Custom Mapbox Style Layer
+        const customMapbox = L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}', {
+            attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
+            maxZoom: 20,
+            // Use the specific style ID provided by the user
+            id: 'vr00n-nycsbus/clyyoiorc00uu01pe8ttggvhd',
+            tileSize: 512,
+            zoomOffset: -1,
+            accessToken: mapboxAccessToken || 'DUMMY_TOKEN' // Use token or a placeholder if missing
+        });
+
+        // 2. Initialize Map with default layer
+        map = L.map(mapContainer, {
+             center: [40.7128, -74.0060], // Default: NYC
+             zoom: 11,
+             layers: [osm] // Start with standard OSM map
+        });
+
+        // Add other overlay layers
         routeLayer = L.layerGroup().addTo(map);
         stopsLayer = L.layerGroup().addTo(map);
-        safetyLayer = L.layerGroup().addTo(map); // Layer for safety overlays
+        safetyLayer = L.layerGroup().addTo(map);
         depotLayer = L.layerGroup().addTo(map);
+
+        // 3. Create Basemap Control Object
+        const baseMaps = {
+            "Standard": osm,
+            "Grayscale": grayscale,
+            "Zipcodes": customMapbox // Add your custom map
+        };
+
+        // 4. Add Layer Control to Map
+        L.control.layers(baseMaps).addTo(map);
+
         mapInitialized = true;
-        console.log("DEBUG: Leaflet map initialized successfully.");
+        console.log("DEBUG: Leaflet map initialized successfully with basemap toggle.");
         addDepotMarkers(); // Add depots after map init
+
     } catch (err) {
          console.error("DEBUG ERROR: Failed to initialize Leaflet map:", err);
          if (mapContainer) mapContainer.innerHTML = '<p style="color: red; text-align: center; padding: 20px;">Error: Could not load the map.</p>';
@@ -75,6 +126,7 @@ function addDepotMarkers() {
     }
     console.log(`DEBUG: Added ${depotCount} depot markers.`);
 } // End addDepotMarkers
+
 
 
 // --- Function to Display Regular Map Data (AM/PM Trace and Stops) ---
@@ -333,6 +385,23 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeMap();
     // --- Set Initial Button States ---
     updateButtonStates();
+
+    const logo = document.querySelector('.title-logo'); // Target logo by class
+    if (logo) {
+        logo.addEventListener('click', () => {
+            console.log("DEBUG: Logo clicked!");
+            // Prevent adding class if already spinning
+            if (!logo.classList.contains('spinning')) {
+                logo.classList.add('spinning');
+                // Remove the class after the animation duration (1000ms = 1s)
+                setTimeout(() => {
+                    logo.classList.remove('spinning');
+                }, 1000);
+            }
+        });
+    } else {
+        console.warn("DEBUG WARN: Logo element with class 'title-logo' not found.");
+    }
 
     // --- Event Listener for Get Map Button ---
     getMapButton.addEventListener('click', async () => {

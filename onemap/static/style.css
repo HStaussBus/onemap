@@ -369,6 +369,23 @@ button:hover {
     /* text-decoration: none; */ /* Optional */
 }
 
+/* --- Logo Spinning Animation --- */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.title-logo.spinning {
+  animation-name: spin;
+  animation-duration: 1000ms; /* 1 second duration */
+  animation-iteration-count: 1; /* Spin once */
+  animation-timing-function: linear; /* Constant speed */
+}
+
 /* Basic Responsive adjustments */
 @media (max-width: 768px) {
     .app-header {
