@@ -13,6 +13,7 @@ import processing   # Assuming this now contains annotate_log_records_with_excep
 import os
 import platform
 import re
+import json
 
 app = Flask(__name__)
 
@@ -20,6 +21,7 @@ app = Flask(__name__)
 current_ras_df = pd.DataFrame()
 historical_ras_df = pd.DataFrame()
 ras_data_lock = threading.Lock()
+depot_locations = getattr(config, 'DEPOT_LOCS', {})
 
 # --- Initialize Clients ---
 print("INFO: Initializing clients...")
@@ -145,7 +147,7 @@ def get_depot_from_ras(ras_df):
     except IndexError: return None
     if pd.isna(yard_string) or yard_string == '': return None
     yard_string_lower = str(yard_string).lower().strip()
-    for depot_name in config.DEPOT_LOCS.keys():
+    for depot_name in depot_locations.keys(): # <-- Changed from config.DEPOT_LOCS
         if depot_name.lower() in yard_string_lower: return depot_name
     return None
 
@@ -305,7 +307,8 @@ def index():
     """Serves the main HTML page, passing the Mapbox token."""
     # Ensure mapbox_token is passed correctly
     print(f"DEBUG: Passing mapbox_token to template: {'Yes' if mapbox_token else 'No'}")
-    return render_template('index.html', mapbox_token=mapbox_token)
+    depots_json = json.dumps(depot_locations)
+    return render_template('index.html', mapbox_token=mapbox_token, depot_locations_json=depots_json)
 
 
 # --- /get_map Route ---
@@ -427,9 +430,9 @@ def get_map_data():
         # 5. Prepare Time Inputs for GPS Fetching
         # Define default time windows (adjust as needed)
         am_start_hour, am_start_minute = 4, 0   # Example: 4:00 AM
-        am_end_hour, am_end_minute = 12, 0      # Example: 12:00 PM (Noon)
-        pm_start_hour, pm_start_minute = 12, 0  # Example: 12:00 PM (Noon)
-        pm_end_hour, pm_end_minute = 20, 0      # Example: 8:00 PM
+        am_end_hour, am_end_minute = 14, 0      # Example: 12:00 PM (Noon)
+        pm_start_hour, pm_start_minute = 14, 0  # Example: 12:00 PM (Noon)
+        pm_end_hour, pm_end_minute = 22, 0      # Example: 8:00 PM
 
         # 6. Process AM Data (Fetch GPS Trace)
         print("Processing AM Data...")

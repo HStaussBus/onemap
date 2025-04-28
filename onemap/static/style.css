@@ -47,7 +47,7 @@ body {
 
 .app-header h1 {
     font-size: 3.5em;
-    color: #002447; /* Dark heading color */
+    color: #002447; /* Dark heading color */ 
     margin: 0; /* Remove default margin */
 }
 
@@ -126,8 +126,8 @@ button:hover {
     padding: 8px 15px;
     margin: 0 5px;
     cursor: pointer;
-    border: 1px solid #ced4da;
-    background-color: #e9ecef; /* Light gray inactive */
+    border: 1px solid #99c4f0;
+    background-color: #99c4f0; /* Light gray inactive */
     border-radius: 4px;
     font-size: 0.9em;
     transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
@@ -141,7 +141,27 @@ button:hover {
     background-color: #007bff; /* Match primary button color */
     color: white;
     border-color: #007bff;
-    font-weight: bold;
+    font-weight: bold; }
+
+#showSafetyButton {
+  /* Centering */
+  display: block;      /* Allows margin auto centering */
+  margin-left: auto;
+  margin-right: auto;
+  width: fit-content;  /* Adjust width to content size */
+
+  /* Spacing */
+  margin-top: 15px;    /* Space above */
+  margin-bottom: 10px; /* Space below */
+  padding: 8px 20px;   /* Internal padding (top/bottom, left/right) */
+}
+
+/* Keep the active style for visual feedback */
+#showSafetyButton.safety-active {
+  background-color: #fd7e14; /* Orange indicator for safety mode */
+  border-color: #fd7e14;
+  font-weight: bold;
+
 }
 #mapContainer { /* Target the specific ID */
     width: 100%;
@@ -318,6 +338,35 @@ button:hover {
     font-style: italic;
     color: #6c757d;
     text-align: center;
+}
+
+/* --- Styling for Safety Button when Ready --- */
+#showSafetyButton.ready-to-use {
+  background-color: #0056b3; /* Darker blue background */
+  /* color: white; */ /* Optional: Adjust text color if needed */
+  /* border-color: #004a9a; */ /* Optional: Darker border */
+}
+
+/* Ensure the active state overrides the ready state visually */
+#showSafetyButton.safety-active {
+  background-color: #fd7e14 !important; /* Orange indicator */
+  border-color: #fd7e14 !important;
+  font-weight: bold;
+  color: white;
+}
+
+/* Style for the OPT link when active/ready */
+#optLink.active {
+    opacity: 1;
+    cursor: pointer;
+    /* text-decoration: underline; */ /* Optional */
+}
+
+/* Default inactive style for OPT link */
+#optLink {
+    opacity: 0.5;
+    cursor: default;
+    /* text-decoration: none; */ /* Optional */
 }
 
 /* Basic Responsive adjustments */
